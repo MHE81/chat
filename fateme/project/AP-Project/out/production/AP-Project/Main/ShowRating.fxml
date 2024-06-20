@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.text.Font?>
+
+<AnchorPane prefHeight="422.0" prefWidth="672.0" style="-fx-background-color: #f1f1f9;" xmlns="http://javafx.com/javafx/8.0.171" xmlns:fx="http://javafx.com/fxml/1" fx:controller="Main.ShowRatings">
+   <children>
+      <ImageView fitHeight="374.0" fitWidth="480.0" layoutY="42.0" pickOnBounds="true" preserveRatio="true">
+         <image>
+            <Image url="@rankingBBack.jpg" />
+         </image>
+      </ImageView>
+      <VBox layoutX="493.0" layoutY="100.0" nodeOrientation="RIGHT_TO_LEFT" prefHeight="168.0" prefWidth="144.0" spacing="10.0">
+         <children>
+            <Button fx:id="ratingBttn" mnemonicParsing="false" onAction="#setRatings" prefHeight="55.0" prefWidth="145.0" style="-fx-background-color: #ffcf28; -fx-border-color: #4040a2; -fx-background-radius: 15; -fx-border-radius: 15;" text="نمایش امتیازات" textFill="#4040a2">
+               <font>
+                  <Font name="Sakkal Majalla Bold" size="24.0" />
+               </font>
+            </Button>
+            <Label fx:id="ratinglbl" alignment="CENTER" contentDisplay="CENTER" prefHeight="52.0" prefWidth="145.0" style="-fx-background-color: #ffcf28; -fx-border-color: #4040a2; -fx-background-radius: 15; -fx-border-radius: 15;" textFill="#4040a2">
+               <font>
+                  <Font name="Sakkal Majalla Bold" size="20.0" />
+               </font>
+            </Label>
+         </children>
+      </VBox>
+      <Button fx:id="continueBttn" layoutX="565.0" layoutY="309.0" mnemonicParsing="false" onAction="#continueButtonPushed" prefHeight="35.0" prefWidth="77.0" style="-fx-background-color: #ffcf28; -fx-border-color: #4040a2; -fx-background-radius: 15; -fx-border-radius: 15;" text="ادامه" textFill="#4040a2">
+         <font>
+            <Font name="Sakkal Majalla Bold" size="20.0" />
+         </font>
+      </Button>
+      <Button fx:id="exitGameBttn" disable="true" layoutX="480.0" layoutY="309.0" mnemonicParsing="false" onAction="#exitGameButtonPushed" prefHeight="35.0" prefWidth="77.0" style="-fx-background-color: #ffcf28; -fx-border-color: #4040a2; -fx-background-radius: 15; -fx-border-radius: 15;" text="پایان" textFill="#4040a2">
+         <font>
+            <Font name="Sakkal Majalla Bold" size="20.0" />
+         </font>
+      </Button>
+   </children>
+</AnchorPane>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/project/APClient/APClient.iml" filepath="$PROJECT_DIR$/project/APClient/APClient.iml" />
+      <module fileurl="file://$PROJECT_DIR$/fateme.iml" filepath="$PROJECT_DIR$/fateme.iml" />
+    </modules>
+  </component>
+</project>
