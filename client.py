@@ -5,7 +5,7 @@ from system import User, generate_key_pair, ChatSystem, key_fromJson, Key
 import socket
 import threading
 # import json
-# from system import encrypt, decrypt
+from system import encrypt, decrypt
 FORMAT = 'utf_8'
 
 
@@ -122,9 +122,16 @@ class SignUpSystem:
                     massage = s.recv(12345).decode(FORMAT)
                     print(massage)
                     if massage == "User is found":
-                        contact_publickey_port = s.recv(122345).decode(FORMAT)
-                        print(contact_publickey_port)
-
+                        contact_publickey = s.recv(12345).decode(FORMAT)
+                        print(contact_publickey)
+                        server_pub = eval(s.recv(12345).decode(FORMAT))
+                        print(server_pub)
+                        pub_list = [contact_publickey]
+                        # server_pub.split("server public key:")
+                        de_contact_publickey = decrypt(pub_list, server_pub)
+                        print(de_contact_publickey)
+                        # contact_port = s.recv(12345).decode(FORMAT)
+                        # print(contact_port)
 
                     elif massage == "User not found.":
                         continue
@@ -145,7 +152,7 @@ class SignUpSystem:
                     print(massage)
                     choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
                     if choice == 1:
-                        SignUpSystem.private_chat(self)
+                        SignUpSystem.private_chat(SignUpSystem)
                     if choice == 2:
                         pass
                     if choice == 3:

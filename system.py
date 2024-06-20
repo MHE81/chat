@@ -156,6 +156,10 @@ class Key:
         }
         return json.dumps(key_model)
 
+    def __repr__(self):
+        return f"Key(Public_key={self.public_key}, Private_key={self.private_key}"
+
+
 
 def key_fromJson(JsonString):
     model = json.loads(JsonString)
@@ -188,6 +192,9 @@ class Connection:
         self.user_B = user_B
         self.port_B = port_B
 
+    def __repr__(self):
+        return f"Conection(User_A{self.user_A, self.port_A,self.user_B, self.port_B}"
+
 
 def generate_random_charset(length):
     # Define the character set (you can customize it as needed)
@@ -197,11 +204,46 @@ def generate_random_charset(length):
     return random_charset
 
 
+class Public_keys:
+    def __init__(self, username, pub):
+        self.username = username
+        self.pub = pub
+
+    def pub_toJason(self):
+        pub_model = {
+            "User_name": self.username,
+            "Public_key": self.pub
+        }
+        return json.dumps(pub_model)
+
+    def __repr__(self):
+        return f"Public_keys(Username={self.username}, Pub={self.pub}"
+
+
+def pub_fromJson(JsonString):
+    model = json.loads(JsonString)
+    # print(model)
+    if isinstance(model, list):
+        # print(model)
+        pubs = [Public_keys(
+            username=item["User_name"],
+            pub=item["Public_key"]
+        ) for item in model]
+        return pubs
+    else:
+        print(model)
+        return Public_keys(
+            username=model["User_name"],
+            pub=model["Public_key"]
+        )
+
+
 class ChatSystem:
     def __init__(self):
         self.users = []
         self.connections = []
         self.server_pub, self.server_pri = generate_key_pair()
+        self.pubs = []
 
     def handle_client(self, conn, addr):
         # server_pub, server_pri = generate_key_pair()
@@ -247,6 +289,9 @@ class ChatSystem:
                     if key_arrive == "keys arrived":
                         new_user.public_key = public_key
                         new_user.private_key = private_key
+                        pub = Public_keys(new_user.username, new_user.public_key)
+                        self.pubs.append(pub)
+                        print(self.pubs)
                         self.users.append(new_user)
                         print(new_user.public_key, "helloooooo")
                         # unsigned_key = str(new_user.username+ new_user.public_key)
@@ -300,19 +345,25 @@ class ChatSystem:
                         if connection.port == port_B:
                             port_B = random.randint(0, 65536)
                     connection = Connection(user.username, port_A, contact_username, port_B)
+                    print(connection)
                     self.connections.append(connection)
                     str_public_key = str(user.public_key)
                     en_public_key = encrypt(str_public_key, self.server_pri)
                     print("encrypted: ", en_public_key)
-                    de_public_key = decrypt(en_public_key,)
-                    conn.sendall(f"Public key for user '{contact_username}':\n{user.public_key}\nPort:{port_A}".encode(FORMAT))
-
+                    # de_public_key = decrypt(en_public_key, self.server_pub)
+                    # print(de_public_key)
+                    conn.sendall(f"Public key for user '{contact_username}':\n{en_public_key}".encode(FORMAT))
+                    print(self.pubs[0])
+                    conn.sendall(str(self.pubs[0]).encode(FORMAT))
+                    # conn.sendall(f"Port:{port_A}".encode(FORMAT))
                 else:
                     print(f"User '{contact_username}' not found.")
                     conn.sendall("User not found.".encode(FORMAT))
 
     def start_server(self):
-        server_pub, server_pri = generate_key_pair()
+        # server_pub, server_pri = generate_key_pair()
+        self.pubs.append(self.server_pub)
+        # print(self.pubs)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('localhost', 12345))
             s.listen()
@@ -371,7 +422,7 @@ def modinv(a, m):
     return x1
 
 
-def generate_key_pair(key_size=256):
+def generate_key_pair(key_size=128):
     # Generate RSA public-private key pair.
     p = generate_large_prime(key_size // 2)
     q = generate_large_prime(key_size // 2)
