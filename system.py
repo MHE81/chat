@@ -8,10 +8,11 @@ from hashlib import sha256
 import string
 import _json
 # from cryptography.fernet import rsa
+FORMAT = 'utf_8'
 
 # def sign(message, private_key):
 #     # Step 1: Hash the message
-#     message_bytes = message.encode()
+#     message_bytes = message.encode(FORMAT)
 #     hashed_message = sha256(message_bytes.digest())
 #     # Step 2: Create a sha256 hash object
 #     hash_object = hashlib.sha256()
@@ -29,7 +30,7 @@ import _json
 
 # def verify_signature(message, signature, public_key):
 #     # Step 1: Hash the message
-#     hashed_message = sha256(message.encode()).digest()
+#     hashed_message = sha256(message.encode(FORMAT)).digest()
 #
 #     # Step 2: Convert hash to integer
 #     hashed_int = int.from_bytes(hashed_message, byteorder='big')
@@ -43,7 +44,7 @@ import _json
 
 def encrypt(message: str, public_key):
     # Step 1: Convert message to bytes
-    message_bytes = message.encode()
+    message_bytes = message.encode(FORMAT)
 
     # Step 2: Encrypt the message
     encrypted_bytes = [pow(b, public_key[0], public_key[1]) for b in message_bytes]
@@ -204,45 +205,45 @@ class ChatSystem:
 
     def handle_client(self, conn, addr):
         # server_pub, server_pri = generate_key_pair()
-        print(server_pub, server_pri)
+        print("server:", self.server_pub, self.server_pri)
         print(f"Connected by {addr}")
         while True:
             data = conn.recv(12345)
             if not data:
                 break
-            command = data.decode()
+            command = data.decode(FORMAT)
             print(command)
             if command == "sign up":
-                conn.sendall("command received".encode())
-                new_user_data = conn.recv(12345).decode()
+                conn.sendall("command received".encode(FORMAT))
+                new_user_data = conn.recv(12345).decode(FORMAT)
                 print(f"Received User info: {new_user_data}")
                 new_user = User_fromJson(new_user_data)
                 new_user.salt = generate_random_charset(8)
                 salted_pass = new_user.password + str(new_user.salt)
-                new_user.hashed = hashlib.sha256(salted_pass.encode()).hexdigest()
+                new_user.hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
                 # print(new_user)
                 # Check if the email already exists
                 if any(user.email == new_user.email for user in self.users):
-                    conn.sendall("Email already exists. Please enter another email.".encode())
-                    # new_user.email = conn.recv(12345).decode()
+                    conn.sendall("Email already exists. Please enter another email.".encode(FORMAT))
+                    # new_user.email = conn.recv(12345).decode(FORMAT)
                     continue
                 elif any(user.username == new_user.username for user in self.users):
-                    conn.sendall("UserName already exists. Please enter another UserName.".encode())
+                    conn.sendall("UserName already exists. Please enter another UserName.".encode(FORMAT))
                     continue
-                    # new_user.username = conn.recv(12345).decode()
+                    # new_user.username = conn.recv(12345).decode(FORMAT)
                 elif any(user.salt == new_user.salt for user in self.users):
                     new_user.salt = generate_random_charset(8)
-                    conn.sendall("Wait a few minutes...".encode())
+                    conn.sendall("Wait a few minutes...".encode(FORMAT))
                     break
                 else:
-                    conn.sendall("Here is your key:".encode())
+                    conn.sendall("Here is your key:".encode(FORMAT))
                     # print(self.users, "hello")
                     public_key, private_key = generate_key_pair()
                     keys = Key(public_key, private_key)
                     # key = str(keys)
                     user_keys = keys.key_toJason()
-                    conn.sendall(user_keys.encode())
-                    key_arrive = conn.recv(12345).decode()
+                    conn.sendall(user_keys.encode(FORMAT))
+                    key_arrive = conn.recv(12345).decode(FORMAT)
                     if key_arrive == "keys arrived":
                         new_user.public_key = public_key
                         new_user.private_key = private_key
@@ -251,11 +252,11 @@ class ChatSystem:
                         # unsigned_key = str(new_user.username+ new_user.public_key)
                         print(self.users[0])
                         # signed = sign(unsigned_key, self.users[0].private_key)
-                        # conn.sendall(signed.encode())
-                        # finish = conn.recv(12345).decode()
+                        # conn.sendall(signed.encode(FORMAT))
+                        # finish = conn.recv(12345).decode(FORMAT)
                         # if finish == "got the sign":
                         #     print(public_key, private_key)
-                        conn.sendall("User successfully registered.".encode())
+                        conn.sendall("User successfully registered.".encode(FORMAT))
                         new_user.public_key = public_key
                         new_user.private_key = private_key
                         # self.users.append(new_user)
@@ -264,33 +265,33 @@ class ChatSystem:
                 break
 
             if command == "login":
-                conn.sendall("command received".encode())
-                username = conn.recv(12345).decode()
-                password = conn.recv(12345).decode()
+                conn.sendall("command received".encode(FORMAT))
+                username = conn.recv(12345).decode(FORMAT)
+                password = conn.recv(12345).decode(FORMAT)
                 for user in self.users:
                     if user.username == username:
                         # Combine the entered password with the stored salt for hashing
                         salted_pass = password + str(user.salt)
                         # Hash the combined password and salt
-                        hashed = hashlib.sha256(salted_pass.encode()).hexdigest()
+                        hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
                         # Check if the hashed password matches the stored hashed password
                         if hashed == user.hashed:
-                            conn.sendall("Login successful".encode())
+                            conn.sendall("Login successful".encode(FORMAT))
                             return
                         else:
-                            conn.sendall("Incorrect password!".encode())
+                            conn.sendall("Incorrect password!".encode(FORMAT))
                             return
-                # conn.sendall("User not found.".encode())
+                # conn.sendall("User not found.".encode(FORMAT))
             # if command == "Show Users":
-                # conn.sendall(str(self.users["username"]).encode())
+                # conn.sendall(str(self.users["username"]).encode(FORMAT))
             if command == "private chat":
-                conn.sendall("command received".encode())
-                contact_username = conn.recv(12345).decode()
+                conn.sendall("command received".encode(FORMAT))
+                contact_username = conn.recv(12345).decode(FORMAT)
 
                 user = find_user_by_username(self.users, contact_username)
                 if user:
                     print(f"Public key for user '{contact_username}':\n{user.public_key}")
-                    conn.sendall("User is found".encode())
+                    conn.sendall("User is found".encode(FORMAT))
                     port_A = random.randint(0, 65536)
                     port_B = random.randint(0, 65536)
                     for connection in self.connections:
@@ -301,13 +302,14 @@ class ChatSystem:
                     connection = Connection(user.username, port_A, contact_username, port_B)
                     self.connections.append(connection)
                     str_public_key = str(user.public_key)
-                    en_public_key = encrypt(str_public_key, server_pri)
-                    print(en_public_key)
-                    conn.sendall(f"Public key for user '{contact_username}':\n{user.public_key}\nPort:{port_A}".encode())
+                    en_public_key = encrypt(str_public_key, self.server_pri)
+                    print("encrypted: ", en_public_key)
+                    de_public_key = decrypt(en_public_key,)
+                    conn.sendall(f"Public key for user '{contact_username}':\n{user.public_key}\nPort:{port_A}".encode(FORMAT))
 
                 else:
                     print(f"User '{contact_username}' not found.")
-                    conn.sendall("User not found.".encode())
+                    conn.sendall("User not found.".encode(FORMAT))
 
     def start_server(self):
         server_pub, server_pri = generate_key_pair()
@@ -369,7 +371,7 @@ def modinv(a, m):
     return x1
 
 
-def generate_key_pair(key_size=512):
+def generate_key_pair(key_size=256):
     # Generate RSA public-private key pair.
     p = generate_large_prime(key_size // 2)
     q = generate_large_prime(key_size // 2)
