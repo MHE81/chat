@@ -1,11 +1,14 @@
+import ast
 import hashlib
 import random
 import string
-from system import User, generate_key_pair, ChatSystem, key_fromJson, Key
+from system import User, ChatSystem, key_fromJson, Key
 import socket
 import threading
 # import json
-from system import encrypt, decrypt
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
+
 FORMAT = 'utf_8'
 
 
@@ -41,10 +44,10 @@ class SignUpSystem:
                 if massage == "Here is your key:":
                     keys = s.recv(12345).decode(FORMAT)
                     s.sendall("keys arrived".encode(FORMAT))
-                    # print(keys)
-                    user_keys = key_fromJson(keys)
-                    print(user_keys)
-                    user_list.extend([username, user_keys])
+                    print(keys)
+                    # user_keys = key_fromJson(keys)
+                    # print(user_keys)
+                    user_list.extend([username, keys])
                     print(user_list)
                     # signed = s.recv(12345).decode(FORMAT)
                     # s.sendall("got the sign".encode(FORMAT))
@@ -98,10 +101,10 @@ class SignUpSystem:
                         keys = s.recv(12345).decode(FORMAT)
                         # print(keys, "hello")
                         s.sendall("keys arrived".encode(FORMAT))
-                        # print(keys)
-                        user_keys = key_fromJson(keys)
-                        print(user_keys)
-                        user_list.extend([username, user_keys])
+                        print(keys)
+                        # user_keys = key_fromJson(keys)
+                        # print(user_keys)
+                        user_list.extend([username, keys])
                         print(user_list)
                         # signed = s.recv(12345).decode(FORMAT)
                         # s.sendall("got the sign".encode(FORMAT))
@@ -110,13 +113,14 @@ class SignUpSystem:
                         break
                 break
 
-    def private_chat(self):
+    def private_chat(self, username):
         while True:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect(('localhost', 12345))
                 s.sendall("private chat".encode(FORMAT))
                 receive = s.recv(12345).decode(FORMAT)
                 if receive == "command received":
+                    s.sendall(f"{username}".encode(FORMAT))
                     contact_username = str(input("Chat with: "))
                     s.sendall(contact_username.encode(FORMAT))
                     massage = s.recv(12345).decode(FORMAT)
@@ -125,10 +129,22 @@ class SignUpSystem:
                         contact_publickey = s.recv(12345).decode(FORMAT)
                         print(contact_publickey)
                         server_pub = eval(s.recv(12345).decode(FORMAT))
+                        # user_key = Key(server_pub, "")
                         print(server_pub)
-                        pub_list = [contact_publickey]
+                        # pub_list = [contact_publickey]
+
                         # server_pub.split("server public key:")
-                        de_contact_publickey = decrypt(pub_list, server_pub)
+                        # print(server_pub, "ser_pub")
+                        # print(type(pub_list), type(server_pub), "types")
+                        # de_contact_publickey = decrypt(contact_publickey.encode(), server_pub)
+                        de_contact_publickey = private_key.decrypt(
+                            encrypted_message,
+                            padding.OAEP(
+                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                            algorithm=hashes.SHA256(),
+                            label=None
+                            )
+                        )
                         print(de_contact_publickey)
                         # contact_port = s.recv(12345).decode(FORMAT)
                         # print(contact_port)
@@ -152,7 +168,7 @@ class SignUpSystem:
                     print(massage)
                     choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
                     if choice == 1:
-                        SignUpSystem.private_chat(SignUpSystem)
+                        SignUpSystem.private_chat(SignUpSystem, username)
                     if choice == 2:
                         pass
                     if choice == 3:

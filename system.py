@@ -1,4 +1,5 @@
 import json
+import pickle
 import random
 from math import gcd
 import socket
@@ -7,59 +8,30 @@ import hashlib
 from hashlib import sha256
 import string
 import _json
-# from cryptography.fernet import rsa
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 FORMAT = 'utf_8'
 
-# def sign(message, private_key):
-#     # Step 1: Hash the message
+# def encrypt(message: str, public_key):
+#     # Step 1: Convert message to bytes
 #     message_bytes = message.encode(FORMAT)
-#     hashed_message = sha256(message_bytes.digest())
-#     # Step 2: Create a sha256 hash object
-#     hash_object = hashlib.sha256()
-#     # Step 3: Pass the bytes to the hash object
-#     hash_object.update(message_bytes)
-#     # Step 4: Get the hexadecimal digest of the hash
-#     hash_digest = hash_object.hexdigest()
-#     # Step 5: Sign the integer
-#     signature = pow(hash_digest, private_key[0], private_key[1])
 #
-#     # # Step 2: Convert hash to integer
-#     # hashed_int = int.from_bytes(hashed_message, byteorder='big')
-#     return signature
-
-
-# def verify_signature(message, signature, public_key):
-#     # Step 1: Hash the message
-#     hashed_message = sha256(message.encode(FORMAT)).digest()
+#     # Step 2: Encrypt the message
+#     encrypted_bytes = [pow(b, public_key[0], public_key[1]) for b in message_bytes]
 #
-#     # Step 2: Convert hash to integer
-#     hashed_int = int.from_bytes(hashed_message, byteorder='big')
+#     return encrypted_bytes
 #
-#     # Step 3: Decrypt the signature
-#     decrypted_hash = pow(signature, public_key[0], public_key[1])
 #
-#     # Step 4: Compare the hashes
-#     return hashed_int == decrypted_hash
-
-
-def encrypt(message: str, public_key):
-    # Step 1: Convert message to bytes
-    message_bytes = message.encode(FORMAT)
-
-    # Step 2: Encrypt the message
-    encrypted_bytes = [pow(b, public_key[0], public_key[1]) for b in message_bytes]
-
-    return encrypted_bytes
-
-
-def decrypt(encrypted_bytes, private_key):
-    # Step 1: Decrypt the message
-    decrypted_bytes = [pow(b, private_key[0], private_key[1]) for b in encrypted_bytes]
-
-    # Step 2: Convert bytes to string
-    decrypted_message = "".join(chr(b) for b in decrypted_bytes)
-
-    return decrypted_message
+# def decrypt(encrypted_bytes, private_key):
+#     print(type(encrypted_bytes), type(private_key))
+#     # Step 1: Decrypt the message
+#     print(private_key)
+#     decrypted_bytes = [pow(b, private_key[0], private_key[1]) for b in encrypted_bytes]
+#
+#     # Step 2: Convert bytes to string
+#     decrypted_message = "".join(chr(b) for b in decrypted_bytes)
+#
+#     return decrypted_message
 
 
 class User:
@@ -160,7 +132,6 @@ class Key:
         return f"Key(Public_key={self.public_key}, Private_key={self.private_key}"
 
 
-
 def key_fromJson(JsonString):
     model = json.loads(JsonString)
     # print(model)
@@ -242,13 +213,28 @@ class ChatSystem:
     def __init__(self):
         self.users = []
         self.connections = []
-        self.server_pub, self.server_pri = generate_key_pair()
+        # self.server_pub, self.server_pri = generate_key_pair()
+        self.server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.server_public_key = self.server_private_key.public_key()
+        # Serialize private key
+        self.server_private_pem = self.server_private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        # Serialize public key
+        self.server_public_pem = self.server_public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+
         self.pubs = []
 
     def handle_client(self, conn, addr):
         # server_pub, server_pri = generate_key_pair()
-        print("server:", self.server_pub, self.server_pri)
+        print("server:", self.server_public_pem, self.server_private_pem)
         print(f"Connected by {addr}")
+        self.pubs.append(self.server_public_pem)
         while True:
             data = conn.recv(12345)
             if not data:
@@ -280,15 +266,29 @@ class ChatSystem:
                 else:
                     conn.sendall("Here is your key:".encode(FORMAT))
                     # print(self.users, "hello")
-                    public_key, private_key = generate_key_pair()
-                    keys = Key(public_key, private_key)
+                    # public_key, private_key = generate_key_pair()
+                    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+                    public_key = private_key.public_key()
+                    # Serialize private key
+                    private_pem = private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    )
+                    # Serialize public key
+                    public_pem = public_key.public_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    )
+
+                    # keys = Key(public_pem, private_pem)
                     # key = str(keys)
-                    user_keys = keys.key_toJason()
-                    conn.sendall(user_keys.encode(FORMAT))
+                    # user_keys = key.key_toJason()
+                    conn.sendall(f"{private_pem}".encode(FORMAT))
                     key_arrive = conn.recv(12345).decode(FORMAT)
                     if key_arrive == "keys arrived":
-                        new_user.public_key = public_key
-                        new_user.private_key = private_key
+                        new_user.public_key = public_pem
+                        new_user.private_key = private_pem
                         pub = Public_keys(new_user.username, new_user.public_key)
                         self.pubs.append(pub)
                         print(self.pubs)
@@ -302,8 +302,8 @@ class ChatSystem:
                         # if finish == "got the sign":
                         #     print(public_key, private_key)
                         conn.sendall("User successfully registered.".encode(FORMAT))
-                        new_user.public_key = public_key
-                        new_user.private_key = private_key
+                        new_user.public_key = public_pem
+                        new_user.private_key = private_pem
                         # self.users.append(new_user)
                         print(self.users)
                         break
@@ -331,11 +331,11 @@ class ChatSystem:
                 # conn.sendall(str(self.users["username"]).encode(FORMAT))
             if command == "private chat":
                 conn.sendall("command received".encode(FORMAT))
+                src_username = conn.recv(12345).decode(FORMAT)
                 contact_username = conn.recv(12345).decode(FORMAT)
-
                 user = find_user_by_username(self.users, contact_username)
                 if user:
-                    print(f"Public key for user '{contact_username}':\n{user.public_key}")
+                    print(f"Public key for user '{contact_username}': \n{user.public_key}")
                     conn.sendall("User is found".encode(FORMAT))
                     port_A = random.randint(0, 65536)
                     port_B = random.randint(0, 65536)
@@ -344,17 +344,35 @@ class ChatSystem:
                             port_A = random.randint(0, 65536)
                         if connection.port == port_B:
                             port_B = random.randint(0, 65536)
-                    connection = Connection(user.username, port_A, contact_username, port_B)
+                    connection = Connection(src_username, port_A, contact_username, port_B)
                     print(connection)
                     self.connections.append(connection)
-                    str_public_key = str(user.public_key)
-                    en_public_key = encrypt(str_public_key, self.server_pri)
+                    # str_public_key = str(user.public_key)
+                    en_public_key = self.server_private_key.encrypt(user.public_key, padding.OAEP(
+                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                            algorithm=hashes.SHA256(),
+                            label=None
+                        )
+                    )
+                    # en_public_key = encrypt(str_public_key, self.server_private_key)
                     print("encrypted: ", en_public_key)
-                    # de_public_key = decrypt(en_public_key, self.server_pub)
-                    # print(de_public_key)
-                    conn.sendall(f"Public key for user '{contact_username}':\n{en_public_key}".encode(FORMAT))
-                    print(self.pubs[0])
-                    conn.sendall(str(self.pubs[0]).encode(FORMAT))
+                    print(type(self.server_public_key), "type")
+
+                    de_public_key = self.server_public_key.decrypt(
+                        en_public_key,
+                        padding.OAEP(
+                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                            algorithm=hashes.SHA256(),
+                            label=None
+                        )
+                    )
+
+                    # de_public_key = decrypt(en_public_key, self.server_public_key)
+                    print(de_public_key)
+                    # data = pickle.dumps(self.server_pub)
+                    conn.sendall(f"{en_public_key}".encode(FORMAT))
+                    print(self.pubs[1])
+                    conn.sendall(str(self.pubs[1]).encode(FORMAT))
                     # conn.sendall(f"Port:{port_A}".encode(FORMAT))
                 else:
                     print(f"User '{contact_username}' not found.")
@@ -362,7 +380,7 @@ class ChatSystem:
 
     def start_server(self):
         # server_pub, server_pri = generate_key_pair()
-        self.pubs.append(self.server_pub)
+        self.pubs.append(self.server_public_key)
         # print(self.pubs)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('localhost', 12345))
@@ -373,75 +391,78 @@ class ChatSystem:
                 threading.Thread(target=self.handle_client, args=(conn, addr)).start()
 
 
-def is_prime(n, k=5):
-    if n <= 1:
-        return False
-    if n <= 3:
-        return True
-    if n % 2 == 0:
-        return False
-
-    r, s = 0, n - 1
-    while s % 2 == 0:
-        r += 1
-        s //= 2
-
-    for _ in range(k):
-        a = random.randint(2, n - 2)
-        x = pow(a, s, n)
-        if x == 1 or x == n - 1:
-            continue
-        for _ in range(r - 1):
-            x = pow(x, 2, n)
-            if x == n - 1:
-                break
-        else:
-            return False
-    return True
-
-
-def generate_large_prime(key_size):
-    # Generate a large prime number of key_size bits.
-    while True:
-        num = random.getrandbits(key_size)
-        if is_prime(num):
-            return num
-
-
-def modinv(a, m):
-    # Compute the modular inverse of a under modulo m using the Extended Euclidean Algorithm.
-    m0, x0, x1 = m, 0, 1
-    if m == 1:
-        return 0
-    while a > 1:
-        q = a // m
-        m, a = a % m, m
-        x0, x1 = x1 - q * x0, x0
-    if x1 < 0:
-        x1 += m0
-    return x1
-
-
-def generate_key_pair(key_size=128):
-    # Generate RSA public-private key pair.
-    p = generate_large_prime(key_size // 2)
-    q = generate_large_prime(key_size // 2)
-
-    n = p * q
-    phi = (p - 1) * (q - 1)
-
-    e = 65537
-    if gcd(e, phi) != 1:
-        raise ValueError("e and phi are not coprime. Please choose different primes.")
-
-    d = modinv(e, phi)
-
-    public_key = (e, n)
-    private_key = (d, n)
-
-    return public_key, private_key
-
-
 if __name__ == "__main__":
     chat_system = ChatSystem()
     chat_system.start_server()
+
+
+# def is_prime(n, k=5):
+#     if n <= 1:
+#         return False
+#     if n <= 3:
+#         return True
+#     if n % 2 == 0:
+#         return False
+#
+#     r, s = 0, n - 1
+#     while s % 2 == 0:
+#         r += 1
+#         s //= 2
+#
+#     for _ in range(k):
+#         a = random.randint(2, n - 2)
+#         x = pow(a, s, n)
+#         if x == 1 or x == n - 1:
+#             continue
+#         for _ in range(r - 1):
+#             x = pow(x, 2, n)
+#             if x == n - 1:
+#                 break
+#         else:
+#             return False
+#     return True
+#
+#
+# def generate_large_prime(key_size):
+#     # Generate a large prime number of key_size bits.
+#     while True:
+#         num = random.getrandbits(key_size)
+#         if is_prime(num):
+#             return num
+#
+#
+# def modinv(a, m):
+#     # Compute the modular inverse of a under modulo m using the Extended Euclidean Algorithm.
+#     m0, x0, x1 = m, 0, 1
+#     if m == 1:
+#         return 0
+#     while a > 1:
+#         q = a // m
+#         m, a = a % m, m
+#         x0, x1 = x1 - q * x0, x0
+#     if x1 < 0:
+#         x1 += m0
+#     return x1
+#
+#
+# def generate_key_pair(key_size=128):
+#     # Generate RSA public-private key pair.
+#     p = generate_large_prime(key_size // 2)
+#     q = generate_large_prime(key_size // 2)
+#
+#     n = p * q
+#     phi = (p - 1) * (q - 1)
+#
+#     e = 65537
+#     if gcd(e, phi) != 1:
+#         raise ValueError("e and phi are not coprime. Please choose different primes.")
+#
+#     d = modinv(e, phi)
+#
+#     public_key = (e, n)
+#     private_key = (d, n)
+#
+#     return public_key, private_key
+
+
+
