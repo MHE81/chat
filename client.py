@@ -8,8 +8,22 @@ import threading
 # import json
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from enum import Enum
 
 FORMAT = 'utf_8'
+
+SERVER_IP = 'localhost'
+SERVER_PORT = 5050
+ADDR = (SERVER_IP, SERVER_PORT)
+
+RECEIVE_BUFFER_SIZE = 1024
+
+
+class Role(Enum):
+    SUPER_ADMIN = "super admin"
+    ADMIN = "admin"
+    ADVANCED_USER = "advanced user"
+    BEGINNER_USER = "beginner user"
 
 
 class SignUpSystem:
@@ -19,39 +33,40 @@ class SignUpSystem:
     @staticmethod
     def create_super_admin():
         user_list = []
-        print("Super Admin:\n")
-        email = input("Enter your email: ")
-        username = input("Enter your username: ")
-        password = input("Enter your password: ")
-        password_confirm = input("Confirm your password: ")
-        # salt = generate_random_charset(8)
-        # salted_pass = password + str(salt)
-        # hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
-        role = "super admin"
-        if password != password_confirm:
-            print("Passwords do not match. Please try again.")
-            return
-        userr = User(email, username, password, "", "", role, "", "")
-        useer_data = userr.toJson()
+
+        while True:
+            print("Super Admin:\n")
+            email = input("Enter your email: ")
+            username = input("Enter your username: ")
+            password = input("Enter your password: ")
+            password_confirm = input("Confirm your password: ")
+            role = Role.SUPER_ADMIN
+            if password == password_confirm:
+                print("Passwords matched. ✅")
+                break
+
+        admin_user = User(email, username, password, "", "", role, "", "")
+        admin_user_data = admin_user.toJson()
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 12345))
+            s.connect(ADDR)
             s.sendall("sign up".encode(FORMAT))
-            receive = s.recv(12345).decode(FORMAT)
+            receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
-                print(useer_data)
-                s.sendall(useer_data.encode(FORMAT))
-                massage = s.recv(12345).decode(FORMAT)
+                print(admin_user_data)
+                s.sendall(admin_user_data.encode(FORMAT))
+                massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 if massage == "Here is your key:":
-                    keys = s.recv(12345).decode(FORMAT)
+                    keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     s.sendall("keys arrived".encode(FORMAT))
                     print(keys)
                     # user_keys = key_fromJson(keys)
                     # print(user_keys)
                     user_list.extend([username, keys])
                     print(user_list)
-                    # signed = s.recv(12345).decode(FORMAT)
+                    # signed = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     # s.sendall("got the sign".encode(FORMAT))
-                    success = s.recv(12345).decode(FORMAT)
+                    success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     print(success)
         return user_list
 
@@ -59,27 +74,28 @@ class SignUpSystem:
     def sign_up():
         user_list = []
         while True:
-            email = input("Enter your email: ")
-            username = input("Enter your username: ")
-            password = input("Enter your password: ")
-            password_confirm = input("Confirm your password: ")
-            # salt = generate_random_charset(8)
-            # salted_pass = password + str(salt)
-            # hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
-            if password != password_confirm:
-                print("Passwords do not match. Please try again.")
-                return
-            role = "begginer user"
+
+            while True:
+                email = input("Enter your email: ")
+                username = input("Enter your username: ")
+                password = input("Enter your password: ")
+                password_confirm = input("Confirm your password: ")
+
+                if password == password_confirm:  # condition to exit from signup information loop
+                    print("Passwords matched. ✅")
+                    break
+
+            role = Role.BEGINNER_USER
             user_1 = User(email, username, password, "", "", role, "", "")
             useer_data = user_1.toJson()
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect(('localhost', 12345))
+                s.connect(ADDR)
                 s.sendall("sign up".encode(FORMAT))
-                receive = s.recv(12345).decode(FORMAT)
+                receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 if receive == "command received":
                     print(useer_data, "hello")
                     s.sendall(useer_data.encode(FORMAT))
-                    massage = s.recv(12345).decode(FORMAT)
+                    massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     print(massage)
                     if massage == "Email already exists. Please enter another email.":
                         # userr.email = input("Enter your email: ")
@@ -89,7 +105,7 @@ class SignUpSystem:
                         # userr.username = input("Enter your username: ")
                         # s.sendall(userr.username.encode(FORMAT))
                         continue
-                    # keys = s.recv(12345).decode(FORMAT)
+                    # keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     # # print(keys)
                     # user_keys = key_fromJson(keys)
                     # # print(user_keys)
@@ -98,7 +114,7 @@ class SignUpSystem:
                     elif massage == "Here is your key:":
                         # print(useer_data)
                         # s.sendall(useer_data.encode(FORMAT))
-                        keys = s.recv(12345).decode(FORMAT)
+                        keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         # print(keys, "hello")
                         s.sendall("keys arrived".encode(FORMAT))
                         print(keys)
@@ -106,9 +122,9 @@ class SignUpSystem:
                         # print(user_keys)
                         user_list.extend([username, keys])
                         print(user_list)
-                        # signed = s.recv(12345).decode(FORMAT)
+                        # signed = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         # s.sendall("got the sign".encode(FORMAT))
-                        success = s.recv(12345).decode(FORMAT)
+                        success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         print(success)
                         break
                 break
@@ -116,19 +132,19 @@ class SignUpSystem:
     def private_chat(self, username):
         while True:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect(('localhost', 12345))
+                s.connect(ADDR)
                 s.sendall("private chat".encode(FORMAT))
-                receive = s.recv(12345).decode(FORMAT)
+                receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 if receive == "command received":
                     s.sendall(f"{username}".encode(FORMAT))
                     contact_username = str(input("Chat with: "))
                     s.sendall(contact_username.encode(FORMAT))
-                    massage = s.recv(12345).decode(FORMAT)
+                    massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     print(massage)
                     if massage == "User is found":
-                        contact_publickey = s.recv(12345).decode(FORMAT)
+                        contact_publickey = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         print(contact_publickey)
-                        server_pub = eval(s.recv(12345).decode(FORMAT))
+                        server_pub = eval(s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
                         # user_key = Key(server_pub, "")
                         print(server_pub)
                         # pub_list = [contact_publickey]
@@ -140,13 +156,13 @@ class SignUpSystem:
                         de_contact_publickey = private_key.decrypt(
                             encrypted_message,
                             padding.OAEP(
-                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                            algorithm=hashes.SHA256(),
-                            label=None
+                                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                algorithm=hashes.SHA256(),
+                                label=None
                             )
                         )
                         print(de_contact_publickey)
-                        # contact_port = s.recv(12345).decode(FORMAT)
+                        # contact_port = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         # print(contact_port)
 
                     elif massage == "User not found.":
@@ -157,13 +173,13 @@ class SignUpSystem:
         password = input("Enter your password: ")
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(('localhost', 12345))
+            s.connect(ADDR)
             s.sendall("login".encode(FORMAT))
-            receive = s.recv(12345).decode(FORMAT)
+            receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
                 s.sendall(username.encode(FORMAT))
                 s.sendall(password.encode(FORMAT))
-                massage = s.recv(12345).decode(FORMAT)
+                massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 if massage == "Login successful":
                     print(massage)
                     choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
@@ -180,19 +196,19 @@ class SignUpSystem:
     def show_users(self):
         pass
     #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    #         s.connect(('localhost', 12345))
+    #         s.connect(ADDR)
     #         s.sendall("Show Users".encode(FORMAT))
-    #         user_list = s.recv(12345).decode(FORMAT)
+    #         user_list = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
     #         print(user_list["username"])
 
-        # if not ChatSystem.users:
-        #     print("No users signed up yet.")
-        # else:
-        #     # inp = int(input(": "))
-        #     # print(self.users[inp])
-        #     for user in ChatSystem.users:
-        #         print(user)
-        #         # print(f"Email: {user.email}, Username: {user.username}")
+    # if not ChatSystem.users:
+    #     print("No users signed up yet.")
+    # else:
+    #     # inp = int(input(": "))
+    #     # print(self.users[inp])
+    #     for user in ChatSystem.users:
+    #         print(user)
+    #         # print(f"Email: {user.email}, Username: {user.username}")
 
 
 # Example usage:

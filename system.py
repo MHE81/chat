@@ -10,7 +10,23 @@ import string
 import _json
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from typing import Self
+
 FORMAT = 'utf_8'
+
+SERVER_IP = 'localhost'
+SERVER_PORT = 5050
+ADDR = (SERVER_IP, SERVER_PORT)
+
+RECEIVE_BUFFER_SIZE = 1024
+
+
+class Role(Enum):
+    SUPER_ADMIN = "super admin"
+    ADMIN = "admin"
+    ADVANCED_USER = "advanced user"
+    BEGINNER_USER = "beginner user"
+
 
 # def encrypt(message: str, public_key):
 #     # Step 1: Convert message to bytes
@@ -55,10 +71,10 @@ class User:
         return a permission list between above users
         """
         roles_permissions = {
-            'super admin': [True, True, True, True],
-            'admin': [True, True, True, False],
-            'advanced user': [True, True, False, False],
-            'beginner user': [True, False, False, False]
+            Role.SUPER_ADMIN: [True, True, True, True],
+            Role.ADMIN: [True, True, True, False],
+            Role.ADVANCED_USER: [True, True, False, False],
+            Role.BEGINNER_USER: [True, False, False, False]
         }
         return roles_permissions.get(role, [False, False, False, False])
 
@@ -66,7 +82,7 @@ class User:
         return (f"User(email={self.email}, username={self.username}, "
                 f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role}")
 
-    def toJson(self):
+    def toJson(self) -> str:
         userModel = {
             "Email": self.email,
             "User Name": self.username,
@@ -79,37 +95,48 @@ class User:
         }
         return json.dumps(userModel)
 
-
-# @staticmethod
-def User_fromJson(jsonString):
-    model = json.loads(jsonString)
-    if isinstance(model, list):
-        users = [User(
-            email=item["Email"],
-            username=item["User Name"],
-            password=item["Password"],
-            salt=item["Salt"],
-            hashed=item["Hash Value"],
-            role=item["Role"],
-            public_key=item["Public_key"],
-            private_key=item["Private_key"]
-        ) for item in model]
-        return users
-    else:
-        return User(
-            email=model["Email"],
-            username=model["User Name"],
-            password=model["Password"],
-            salt=model["Salt"],
-            hashed=model["Hash Value"],
-            role=model["Role"],
-            public_key = model["Public_key"],
-            private_key = model["Private_key"]
-        )
-    # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
+    @staticmethod
+    def User_fromJson(jsonString: str) -> Self or list[Self]:
+        """
+        in this function we get a string with json format and make it
+        into a User object or a list of User objects
+        :param jsonString:
+        :return:
+        """
+        model = json.loads(jsonString)
+        if isinstance(model, list):
+            users = [User(
+                email=item["Email"],
+                username=item["User Name"],
+                password=item["Password"],
+                salt=item["Salt"],
+                hashed=item["Hash Value"],
+                role=item["Role"],
+                public_key=item["Public_key"],
+                private_key=item["Private_key"]
+            ) for item in model]
+            return users
+        elif isinstance(model, dict):
+            return User(
+                email=model["Email"],
+                username=model["User Name"],
+                password=model["Password"],
+                salt=model["Salt"],
+                hashed=model["Hash Value"],
+                role=model["Role"],
+                public_key=model["Public_key"],
+                private_key=model["Private_key"]
+            )
+        # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
 
 
 def find_user_by_username(users, username):
+    """
+    search in users by username
+    :param users:
+    :param username:
+    :return:
+    """
     for user in users:
         if user.username == username:
             return user
@@ -133,6 +160,12 @@ class Key:
 
 
 def key_fromJson(JsonString):
+    """
+    explain this function
+    probably convert json string into a key object
+    :param JsonString:
+    :return:
+    """
     model = json.loads(JsonString)
     # print(model)
     if isinstance(model, list):
@@ -157,14 +190,14 @@ def key_fromJson(JsonString):
 
 
 class Connection:
-    def __init__(self, user_A, port_A, user_B, port_B ):
+    def __init__(self, user_A, port_A, user_B, port_B):
         self.user_A = user_A
         self.port_A = port_A
         self.user_B = user_B
         self.port_B = port_B
 
     def __repr__(self):
-        return f"Conection(User_A{self.user_A, self.port_A,self.user_B, self.port_B}"
+        return f"Conection(User_A{self.user_A, self.port_A, self.user_B, self.port_B}"
 
 
 def generate_random_charset(length):
@@ -213,7 +246,6 @@ class ChatSystem:
     def __init__(self):
         self.users = []
         self.connections = []
-        # self.server_pub, self.server_pri = generate_key_pair()
         self.server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.server_public_key = self.server_private_key.public_key()
         # Serialize private key
@@ -228,41 +260,49 @@ class ChatSystem:
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
-        self.pubs = []
+        self.public_keys_list = []
 
     def handle_client(self, conn, addr):
         # server_pub, server_pri = generate_key_pair()
         print("server:", self.server_public_pem, self.server_private_pem)
         print(f"Connected by {addr}")
-        self.pubs.append(self.server_public_pem)
+        self.public_keys_list.append(self.server_public_pem)
         while True:
-            data = conn.recv(12345)
-            if not data:
+            data = conn.recv(RECEIVE_BUFFER_SIZE)
+
+            """
+            first data is a blank message so we want to 
+            work with the main message so we use below 'IF' command
+            """
+
+            if not data:  # if data was empty
                 break
             command = data.decode(FORMAT)
             print(command)
             if command == "sign up":
                 conn.sendall("command received".encode(FORMAT))
-                new_user_data = conn.recv(12345).decode(FORMAT)
+                new_user_data = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(f"Received User info: {new_user_data}")
-                new_user = User_fromJson(new_user_data)
+                new_user = User.User_fromJson(new_user_data)
                 new_user.salt = generate_random_charset(8)
                 salted_pass = new_user.password + str(new_user.salt)
                 new_user.hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
-                # print(new_user)
+
                 # Check if the email already exists
                 if any(user.email == new_user.email for user in self.users):
                     conn.sendall("Email already exists. Please enter another email.".encode(FORMAT))
-                    # new_user.email = conn.recv(12345).decode(FORMAT)
+                    # new_user.email = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     continue
+
+                # Check if the username already exists
                 elif any(user.username == new_user.username for user in self.users):
                     conn.sendall("UserName already exists. Please enter another UserName.".encode(FORMAT))
+                    # new_user.username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     continue
-                    # new_user.username = conn.recv(12345).decode(FORMAT)
-                elif any(user.salt == new_user.salt for user in self.users):
-                    new_user.salt = generate_random_charset(8)
-                    conn.sendall("Wait a few minutes...".encode(FORMAT))
-                    break
+                # elif any(user.salt == new_user.salt for user in self.users): # TODO : is this part necessary ?
+                #     new_user.salt = generate_random_charset(8)
+                #     conn.sendall("Wait a few minutes...".encode(FORMAT))
+                #     break
                 else:
                     conn.sendall("Here is your key:".encode(FORMAT))
                     # print(self.users, "hello")
@@ -285,20 +325,20 @@ class ChatSystem:
                     # key = str(keys)
                     # user_keys = key.key_toJason()
                     conn.sendall(f"{private_pem}".encode(FORMAT))
-                    key_arrive = conn.recv(12345).decode(FORMAT)
+                    key_arrive = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     if key_arrive == "keys arrived":
                         new_user.public_key = public_pem
                         new_user.private_key = private_pem
                         pub = Public_keys(new_user.username, new_user.public_key)
-                        self.pubs.append(pub)
-                        print(self.pubs)
+                        self.public_keys_list.append(pub)
+                        print(self.public_keys_list)
                         self.users.append(new_user)
                         print(new_user.public_key, "helloooooo")
                         # unsigned_key = str(new_user.username+ new_user.public_key)
                         print(self.users[0])
                         # signed = sign(unsigned_key, self.users[0].private_key)
                         # conn.sendall(signed.encode(FORMAT))
-                        # finish = conn.recv(12345).decode(FORMAT)
+                        # finish = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         # if finish == "got the sign":
                         #     print(public_key, private_key)
                         conn.sendall("User successfully registered.".encode(FORMAT))
@@ -311,8 +351,8 @@ class ChatSystem:
 
             if command == "login":
                 conn.sendall("command received".encode(FORMAT))
-                username = conn.recv(12345).decode(FORMAT)
-                password = conn.recv(12345).decode(FORMAT)
+                username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                password = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 for user in self.users:
                     if user.username == username:
                         # Combine the entered password with the stored salt for hashing
@@ -328,11 +368,11 @@ class ChatSystem:
                             return
                 # conn.sendall("User not found.".encode(FORMAT))
             # if command == "Show Users":
-                # conn.sendall(str(self.users["username"]).encode(FORMAT))
+            # conn.sendall(str(self.users["username"]).encode(FORMAT))
             if command == "private chat":
                 conn.sendall("command received".encode(FORMAT))
-                src_username = conn.recv(12345).decode(FORMAT)
-                contact_username = conn.recv(12345).decode(FORMAT)
+                src_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                contact_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 user = find_user_by_username(self.users, contact_username)
                 if user:
                     print(f"Public key for user '{contact_username}': \n{user.public_key}")
@@ -349,11 +389,11 @@ class ChatSystem:
                     self.connections.append(connection)
                     # str_public_key = str(user.public_key)
                     en_public_key = self.server_private_key.encrypt(user.public_key, padding.OAEP(
-                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                            algorithm=hashes.SHA256(),
-                            label=None
-                        )
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
                     )
+                                                                    )
                     # en_public_key = encrypt(str_public_key, self.server_private_key)
                     print("encrypted: ", en_public_key)
                     print(type(self.server_public_key), "type")
@@ -371,21 +411,21 @@ class ChatSystem:
                     print(de_public_key)
                     # data = pickle.dumps(self.server_pub)
                     conn.sendall(f"{en_public_key}".encode(FORMAT))
-                    print(self.pubs[1])
-                    conn.sendall(str(self.pubs[1]).encode(FORMAT))
+                    print(self.public_keys_list[1])
+                    conn.sendall(str(self.public_keys_list[1]).encode(FORMAT))
                     # conn.sendall(f"Port:{port_A}".encode(FORMAT))
                 else:
                     print(f"User '{contact_username}' not found.")
                     conn.sendall("User not found.".encode(FORMAT))
 
     def start_server(self):
-        # server_pub, server_pri = generate_key_pair()
-        self.pubs.append(self.server_public_key)
-        # print(self.pubs)
+        self.public_keys_list.append(self.server_public_key)
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('localhost', 12345))
+            s.bind(ADDR)
+            print("[SERVER STARTED]")
             s.listen()
-            print("Chat system listening on port 12345...")
+            print(f"Chat system listening on port {SERVER_PORT}...")
             while True:
                 conn, addr = s.accept()
                 threading.Thread(target=self.handle_client, args=(conn, addr)).start()
@@ -394,7 +434,6 @@ class ChatSystem:
 if __name__ == "__main__":
     chat_system = ChatSystem()
     chat_system.start_server()
-
 
 # def is_prime(n, k=5):
 #     if n <= 1:
@@ -463,6 +502,3 @@ if __name__ == "__main__":
 #     private_key = (d, n)
 #
 #     return public_key, private_key
-
-
-
