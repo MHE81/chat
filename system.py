@@ -11,6 +11,8 @@ import _json
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from typing import Self
+from enum import Enum
+import base64
 
 FORMAT = 'utf_8'
 
@@ -83,14 +85,14 @@ class User:
         return (f"User(email={self.email}, username={self.username}, "
                 f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role}")
 
-    def toJson(self) -> str:
+    def toJson(self):
         userModel = {
             "Email": self.email,
             "User Name": self.username,
             "Password": self.password,
             "Salt": self.salt,
             "Hash Value": self.hashed,
-            "Role": self.role,
+            "Role": self.role.value,
             "Public_key": self.public_key,
             "Private_key": self.private_key
         }
@@ -197,8 +199,8 @@ class Connection:
         self.user_B = user_B
         self.port_B = port_B
 
-    def __repr__(self):
-        return f"Conection(User_A{self.user_A, self.port_A, self.user_B, self.port_B}"
+    def __str__(self):
+        return f"Conection username1 :{self.user_A}, userport1 : {self.port_A}, username2 :{self.user_B}, userport2 :{self.port_B}"
 
 
 def generate_random_charset(length):
@@ -255,6 +257,7 @@ class ChatSystem:
         self.connections: list[Connection] = []
         self.server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.server_public_key = self.server_private_key.public_key()
+
         # Serialize private key
         self.server_private_pem = self.server_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -267,12 +270,16 @@ class ChatSystem:
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
+        # build a pem file that stores server public key
+        with open('server_public_key.pem', 'wb') as f:
+            f.write(self.server_public_pem)
+
         self.public_keys_list = []
         """
         a list of Public_keys class
         """
 
-    def sign_up_method(self) -> Str:
+    def sign_up_method(self, conn) -> str:
         conn.sendall("command received".encode(FORMAT))
         new_user_data = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         print(f"Received User info: {new_user_data}")
@@ -292,7 +299,7 @@ class ChatSystem:
             conn.sendall("UserName already exists. Please enter another UserName.".encode(FORMAT))
             # new_user.username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             return 'c'
-        # elif any(user.salt == new_user.salt for user in self.users): # TODO : is this part necessary ?
+        # elif any(user.salt == new_user.salt for user in self.users):      # TODO : is this part necessary ?
         #     new_user.salt = generate_random_charset(8)
         #     conn.sendall("Wait a few minutes...".encode(FORMAT))
         #     break
@@ -342,7 +349,7 @@ class ChatSystem:
                 return 'b'
         return 'b'
 
-    def login_method(self) -> str:
+    def login_method(self, conn) -> str:
         conn.sendall("command received".encode(FORMAT))
         username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         password = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
@@ -361,66 +368,82 @@ class ChatSystem:
                     return
         # conn.sendall("User not found.".encode(FORMAT))
 
-    def private_chat_method(self):
-        conn.sendall("command received".encode(FORMAT))
-        src_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-        contact_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-        user = find_user_by_username(self.users, contact_username)
-        if user:
-            print(f"Public key for user '{contact_username}': \n{user.public_key}")
-            conn.sendall("User is found".encode(FORMAT))
-            port_A: int = random.randint(0, 65536)
-            port_B: int = random.randint(0, 65536)
-
-            ports_are_unique: bool = False
-            all_b_ports = [x.port_B for x in self.connections]
-            all_a_ports = [x.port_A for x in self.connections]
-            all_ports = all_a_ports + all_b_ports
-
-            while not ports_are_unique:
-                ports_are_unique = True
-
-                if port_A in all_ports:
-                    port_A = random.randint(0, 65536)
-                    ports_are_unique = False
-
-                if port_B in allports:
-                    port_B = random.randint(0, 65536)
-                    ports_are_unique = False
-
-            connection = Connection(src_username, port_A, contact_username, port_B)
-            print(connection)
-            self.connections.append(connection)
-            # str_public_key = str(user.public_key)
-            en_public_key = self.server_private_key.encrypt(user.public_key, padding.OAEP(
+    @staticmethod
+    def decrypt_with_public_key(public_key, encrypted_data):
+        return public_key.decrypt(
+            encrypted_data,
+            padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
                 label=None
             )
-                                                            )
-            # en_public_key = encrypt(str_public_key, self.server_private_key)
-            print("encrypted: ", en_public_key)
-            print(type(self.server_public_key), "type")
+        )
 
-            de_public_key = self.server_public_key.decrypt(
-                en_public_key,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
-                )
-            )
+    @staticmethod
+    def sign_with_private_key(private_key, message) -> bytes:
+        signature = private_key.sign(
+            message.encode('utf-8'),  # Ensure the message is in bytes
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+        return signature
 
-            # de_public_key = decrypt(en_public_key, self.server_public_key)
-            print(de_public_key)
-            # data = pickle.dumps(self.server_pub)
-            conn.sendall(f"{en_public_key}".encode(FORMAT))
-            print(self.public_keys_list[1])
-            conn.sendall(str(self.public_keys_list[1]).encode(FORMAT))
-            # conn.sendall(f"Port:{port_A}".encode(FORMAT))
-        else:
-            print(f"User '{contact_username}' not found.")
-            conn.sendall("User not found.".encode(FORMAT))
+    def private_chat_method(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        src_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        dest_username: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        dest_user: User = find_user_by_username(self.users, dest_username)
+
+        for temp_conn in self.connections:
+            if (temp_conn.user_A == src_username and temp_conn.user_B == dest_username) or (
+                    temp_conn.user_A == dest_username and temp_conn.user_B == src_username):
+                # connection already exists
+                connection = temp_conn
+                break
+
+        else:  # if for loop completed successfully ( there is no connections between these two points from before )
+            if dest_user:
+                print(f"Public key for user '{dest_username}': \n{dest_user.public_key}")
+                conn.sendall("User is found".encode(FORMAT))
+                port_A: int = random.randint(0, 65536)
+                port_B: int = random.randint(0, 65536)
+
+                all_b_ports = [x.port_B for x in self.connections]
+                all_a_ports = [x.port_A for x in self.connections]
+                all_ports = all_a_ports + all_b_ports
+
+                ports_are_unique = False
+                while not ports_are_unique:
+                    ports_are_unique = True
+
+                    # since all IP addresses are 'localhost' so the ports of A client and B client must be unique for their private connection
+                    if port_A in all_ports:
+                        port_A = random.randint(0, 65536)
+                        ports_are_unique = False
+
+                    if port_B in all_ports:
+                        port_B = random.randint(0, 65536)
+                        ports_are_unique = False
+
+                connection = Connection(src_username, port_A, dest_username, port_B)
+                self.connections.append(connection)
+
+            else:
+                print(f"User '{dest_username}' not found.")
+                conn.sendall("User not found.".encode(FORMAT))
+                return
+
+        print(connection)
+
+        # Encrypt contact user's public key with server's private key
+        signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
+                                                           message=str(dest_user.public_key))
+
+        conn.sendall(signature_pub_b)  # send encrypted public key of client B
+        conn.sendall(str(dest_user.public_key).encode(FORMAT))  # send encode
 
         return
 
@@ -432,10 +455,8 @@ class ChatSystem:
         while True:
             data = conn.recv(RECEIVE_BUFFER_SIZE)
 
-            """
-            first data is a blank message so we want to 
-            work with the main message so we use below 'IF' command
-            """
+            # first data is a blank message, so we want to
+            # work with the main message, so we use below 'IF' command
 
             if not data:  # if data was empty
                 break
@@ -444,20 +465,20 @@ class ChatSystem:
             print(command)
 
             if command == "sign up":
-                break_or_continue = self.sign_up_method()
+                break_or_continue = self.sign_up_method(conn)
                 if break_or_continue == 'c':
                     continue
                 return
 
             if command == "login":
-                self.login_method()
+                self.login_method(conn)
                 return
 
                 # if command == "Show Users":
             # conn.sendall(str(self.users["username"]).encode(FORMAT))
 
             if command == "private chat":
-                self.private_chat_method()
+                self.private_chat_method(conn)
 
     def start_server(self):
         self.public_keys_list.append(self.server_public_key)

@@ -18,6 +18,9 @@ ADDR = (SERVER_IP, SERVER_PORT)
 
 RECEIVE_BUFFER_SIZE = 1024
 
+with open('server_public_key.pem', 'rb') as f:
+    server_public_key = serialization.load_pem_public_key(f.read())
+
 
 class Role(Enum):
     SUPER_ADMIN = "super admin"
@@ -44,6 +47,7 @@ class SignUpSystem:
             if password == password_confirm:
                 print("Passwords matched. ✅")
                 break
+            print("password does not matched ❌")
 
         admin_user = User(email, username, password, "", "", role, "", "")
         admin_user_data = admin_user.toJson()
@@ -129,41 +133,51 @@ class SignUpSystem:
                         break
                 break
 
-    def private_chat(self, username):
+    @staticmethod
+    def verify_signature(public_key, message, signature):
+        try:
+            public_key.verify(
+                signature,
+                message.encode('utf-8'),  # Ensure the message is in bytes
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            print("Signature is valid.")
+            return True
+        except InvalidSignature:
+            print("Signature is invalid.")
+            return False
+
+    @staticmethod
+    def private_chat(username):
         while True:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.connect(ADDR)
                 s.sendall("private chat".encode(FORMAT))
                 receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 if receive == "command received":
-                    s.sendall(f"{username}".encode(FORMAT))
+                    s.sendall(username.encode(FORMAT))
                     contact_username = str(input("Chat with: "))
                     s.sendall(contact_username.encode(FORMAT))
                     massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     print(massage)
                     if massage == "User is found":
-                        contact_publickey = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                        print(contact_publickey)
-                        server_pub = eval(s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
-                        # user_key = Key(server_pub, "")
-                        print(server_pub)
-                        # pub_list = [contact_publickey]
+                        signature_pub_b = s.recv(RECEIVE_BUFFER_SIZE)
+                        print(signature_pub_b)
+                        public_key_user_B = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
-                        # server_pub.split("server public key:")
-                        # print(server_pub, "ser_pub")
-                        # print(type(pub_list), type(server_pub), "types")
-                        # de_contact_publickey = decrypt(contact_publickey.encode(), server_pub)
-                        de_contact_publickey = private_key.decrypt(
-                            encrypted_message,
-                            padding.OAEP(
-                                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                algorithm=hashes.SHA256(),
-                                label=None
-                            )
-                        )
-                        print(de_contact_publickey)
-                        # contact_port = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                        # print(contact_port)
+                        authorized = SignUpSystem.verify_signature(public_key=server_public_key,
+                                                                   message=public_key_user_B,
+                                                                   signature=signature_pub_b)
+
+                        if not authorized:
+                            print("Invalid signature")
+                            return
+                        print("done")
+                        # todo : we had to communicate with client B in this part
 
                     elif massage == "User not found.":
                         continue
@@ -184,7 +198,7 @@ class SignUpSystem:
                     print(massage)
                     choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
                     if choice == 1:
-                        SignUpSystem.private_chat(SignUpSystem, username)
+                        SignUpSystem.private_chat(username)
                     if choice == 2:
                         pass
                     if choice == 3:
