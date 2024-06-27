@@ -53,7 +53,8 @@ class Role(Enum):
 
 
 class User:
-    def __init__(self, email, username, password, salt, hashed, role, public_key, private_key):
+    def __init__(self, email, username, password, role, salt='', hashed='', public_key='', private_key='',
+                 client_listener_port=None):
         self.email = email
         self.username = username
         self.password = password
@@ -63,6 +64,11 @@ class User:
         self.public_key = public_key
         self.private_key = private_key
         self.permissions = self.assign_permissions(role)
+        self.client_listener_port = client_listener_port
+        """
+        a port that the client listens on it so that if another client 
+        asks for a p2p connection we can answer it 
+        """
 
     @staticmethod
     def assign_permissions(role: str) -> list[bool]:
@@ -74,10 +80,10 @@ class User:
         :return list:
         """
         roles_permissions = {
-            Role.SUPER_ADMIN: [True, True, True, True],
-            Role.ADMIN: [True, True, True, False],
-            Role.ADVANCED_USER: [True, True, False, False],
-            Role.BEGINNER_USER: [True, False, False, False]
+            Role.SUPER_ADMIN.value: [True, True, True, True],
+            Role.ADMIN.value: [True, True, True, False],
+            Role.ADVANCED_USER.value: [True, True, False, False],
+            Role.BEGINNER_USER.value: [True, False, False, False]
         }
         return roles_permissions.get(role, [False, False, False, False])
 
@@ -94,7 +100,8 @@ class User:
             "Hash Value": self.hashed,
             "Role": self.role.value,
             "Public_key": self.public_key,
-            "Private_key": self.private_key
+            "Private_key": self.private_key,
+            "client_listener_port": self.client_listener_port
         }
         return json.dumps(userModel)
 
@@ -116,7 +123,8 @@ class User:
                 hashed=item["Hash Value"],
                 role=item["Role"],
                 public_key=item["Public_key"],
-                private_key=item["Private_key"]
+                private_key=item["Private_key"],
+                client_listener_port=item["client_listener_port"]
             ) for item in model]
             return users
         elif isinstance(model, dict):
@@ -128,7 +136,8 @@ class User:
                 hashed=model["Hash Value"],
                 role=model["Role"],
                 public_key=model["Public_key"],
-                private_key=model["Private_key"]
+                private_key=model["Private_key"],
+                client_listener_port=model["client_listener_port"]
             )
         # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
 
@@ -349,7 +358,7 @@ class ChatSystem:
                 return 'b'
         return 'b'
 
-    def login_method(self, conn) -> str:
+    def login_method(self, conn, addr) -> str:
         conn.sendall("command received".encode(FORMAT))
         username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         password = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
@@ -362,6 +371,11 @@ class ChatSystem:
                 # Check if the hashed password matches the stored hashed password
                 if hashed == user.hashed:
                     conn.sendall("Login successful".encode(FORMAT))
+                    # in here when we make sure that if the client logged in successfully
+                    # we will set the client port too
+                    user.client_listener_port = conn.recv(RECEIVE_BUFFER_SIZE)
+                    # we will send the User data to client
+                    conn.sendall(user.toJson().encode(FORMAT))
                     return
                 else:
                     conn.sendall("Incorrect password!".encode(FORMAT))
@@ -408,28 +422,28 @@ class ChatSystem:
             if dest_user:
                 print(f"Public key for user '{dest_username}': \n{dest_user.public_key}")
                 conn.sendall("User is found".encode(FORMAT))
-                port_A: int = random.randint(0, 65536)
-                port_B: int = random.randint(0, 65536)
-
-                all_b_ports = [x.port_B for x in self.connections]
-                all_a_ports = [x.port_A for x in self.connections]
-                all_ports = all_a_ports + all_b_ports
-
-                ports_are_unique = False
-                while not ports_are_unique:
-                    ports_are_unique = True
-
-                    # since all IP addresses are 'localhost' so the ports of A client and B client must be unique for their private connection
-                    if port_A in all_ports:
-                        port_A = random.randint(0, 65536)
-                        ports_are_unique = False
-
-                    if port_B in all_ports:
-                        port_B = random.randint(0, 65536)
-                        ports_are_unique = False
-
-                connection = Connection(src_username, port_A, dest_username, port_B)
-                self.connections.append(connection)
+                # port_A: int = random.randint(0, 65536)    # todo : we have to delete this part and Connections class to
+                # port_B: int = random.randint(0, 65536)
+                #
+                # all_b_ports = [x.port_B for x in self.connections]
+                # all_a_ports = [x.port_A for x in self.connections]
+                # all_ports = all_a_ports + all_b_ports
+                #
+                # ports_are_unique = False
+                # while not ports_are_unique:
+                #     ports_are_unique = True
+                #
+                #     # since all IP addresses are 'localhost' so the ports of A client and B client must be unique for their private connection
+                #     if port_A in all_ports:
+                #         port_A = random.randint(0, 65536)
+                #         ports_are_unique = False
+                #
+                #     if port_B in all_ports:
+                #         port_B = random.randint(0, 65536)
+                #         ports_are_unique = False
+                #
+                # connection = Connection(src_username, port_A, dest_username, port_B)
+                # self.connections.append(connection)
 
             else:
                 print(f"User '{dest_username}' not found.")
@@ -442,6 +456,10 @@ class ChatSystem:
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
                                                            message=str(dest_user.public_key))
 
+        dest_info = json.dumps({
+            "connection_port_b": dest_user.client_listener_port,
+            "public_key": dest_user.public_key
+        })
         conn.sendall(signature_pub_b)  # send encrypted public key of client B
         conn.sendall(str(dest_user.public_key).encode(FORMAT))  # send encode
 
@@ -471,7 +489,7 @@ class ChatSystem:
                 return
 
             if command == "login":
-                self.login_method(conn)
+                self.login_method(conn, addr)
                 return
 
                 # if command == "Show Users":
@@ -496,71 +514,3 @@ class ChatSystem:
 if __name__ == "__main__":
     chat_system = ChatSystem()
     chat_system.start_server()
-
-# def is_prime(n, k=5):
-#     if n <= 1:
-#         return False
-#     if n <= 3:
-#         return True
-#     if n % 2 == 0:
-#         return False
-#
-#     r, s = 0, n - 1
-#     while s % 2 == 0:
-#         r += 1
-#         s //= 2
-#
-#     for _ in range(k):
-#         a = random.randint(2, n - 2)
-#         x = pow(a, s, n)
-#         if x == 1 or x == n - 1:
-#             continue
-#         for _ in range(r - 1):
-#             x = pow(x, 2, n)
-#             if x == n - 1:
-#                 break
-#         else:
-#             return False
-#     return True
-#
-#
-# def generate_large_prime(key_size):
-#     # Generate a large prime number of key_size bits.
-#     while True:
-#         num = random.getrandbits(key_size)
-#         if is_prime(num):
-#             return num
-#
-#
-# def modinv(a, m):
-#     # Compute the modular inverse of a under modulo m using the Extended Euclidean Algorithm.
-#     m0, x0, x1 = m, 0, 1
-#     if m == 1:
-#         return 0
-#     while a > 1:
-#         q = a // m
-#         m, a = a % m, m
-#         x0, x1 = x1 - q * x0, x0
-#     if x1 < 0:
-#         x1 += m0
-#     return x1
-#
-#
-# def generate_key_pair(key_size=128):
-#     # Generate RSA public-private key pair.
-#     p = generate_large_prime(key_size // 2)
-#     q = generate_large_prime(key_size // 2)
-#
-#     n = p * q
-#     phi = (p - 1) * (q - 1)
-#
-#     e = 65537
-#     if gcd(e, phi) != 1:
-#         raise ValueError("e and phi are not coprime. Please choose different primes.")
-#
-#     d = modinv(e, phi)
-#
-#     public_key = (e, n)
-#     private_key = (d, n)
-#
-#     return public_key, private_key
