@@ -179,9 +179,7 @@ def key_fromJson(JsonString):
     :return:
     """
     model = json.loads(JsonString)
-    # print(model)
     if isinstance(model, list):
-        # print(model)
         keys = [Key(
             public_key=item["Public_key"],
             private_key=item["Private_key"]
@@ -193,23 +191,6 @@ def key_fromJson(JsonString):
             public_key=model["Public_key"],
             private_key=model["Private_key"]
         )
-    # public_key = model["Public_key"]
-    # private_key = model["Private_key"]
-    # return key(
-    #     public_key=model["Public_key"],
-    #     private_key=model["Private_key"]
-    # )
-
-
-class Connection:
-    def __init__(self, user_A, port_A, user_B, port_B):
-        self.user_A = user_A
-        self.port_A = port_A
-        self.user_B = user_B
-        self.port_B = port_B
-
-    def __str__(self):
-        return f"Conection username1 :{self.user_A}, userport1 : {self.port_A}, username2 :{self.user_B}, userport2 :{self.port_B}"
 
 
 def generate_random_charset(length):
@@ -263,7 +244,6 @@ class ChatSystem:
     def __init__(self):
         self.users: list[User] = []
         """ a list of signed up users """
-        self.connections: list[Connection] = []
         self.server_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         self.server_public_key = self.server_private_key.public_key()
 
@@ -411,46 +391,13 @@ class ChatSystem:
         dest_username: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         dest_user: User = find_user_by_username(self.users, dest_username)
 
-        for temp_conn in self.connections:
-            if (temp_conn.user_A == src_username and temp_conn.user_B == dest_username) or (
-                    temp_conn.user_A == dest_username and temp_conn.user_B == src_username):
-                # connection already exists
-                connection = temp_conn
-                break
-
-        else:  # if for loop completed successfully ( there is no connections between these two points from before )
-            if dest_user:
-                print(f"Public key for user '{dest_username}': \n{dest_user.public_key}")
-                conn.sendall("User is found".encode(FORMAT))
-                # port_A: int = random.randint(0, 65536)    # todo : we have to delete this part and Connections class to
-                # port_B: int = random.randint(0, 65536)
-                #
-                # all_b_ports = [x.port_B for x in self.connections]
-                # all_a_ports = [x.port_A for x in self.connections]
-                # all_ports = all_a_ports + all_b_ports
-                #
-                # ports_are_unique = False
-                # while not ports_are_unique:
-                #     ports_are_unique = True
-                #
-                #     # since all IP addresses are 'localhost' so the ports of A client and B client must be unique for their private connection
-                #     if port_A in all_ports:
-                #         port_A = random.randint(0, 65536)
-                #         ports_are_unique = False
-                #
-                #     if port_B in all_ports:
-                #         port_B = random.randint(0, 65536)
-                #         ports_are_unique = False
-                #
-                # connection = Connection(src_username, port_A, dest_username, port_B)
-                # self.connections.append(connection)
-
-            else:
-                print(f"User '{dest_username}' not found.")
-                conn.sendall("User not found.".encode(FORMAT))
-                return
-
-        # print(connection)
+        if dest_user:
+            print(f"Public key for user '{dest_username}': \n{dest_user.public_key}")
+            conn.sendall("User is found".encode(FORMAT))
+        else:
+            print(f"User '{dest_username}' not found.")
+            conn.sendall("User not found.".encode(FORMAT))
+            return
 
         # Encrypt contact user's public key with server's private key
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,

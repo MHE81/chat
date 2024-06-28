@@ -256,6 +256,7 @@ def p2p_client(conn, addr):
             s.connect(ADDR)
 
 
+
         # step x decrypt with client B's private key
 
         # step x+1 verify with client A's public key
