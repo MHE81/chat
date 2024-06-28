@@ -450,7 +450,7 @@ class ChatSystem:
                 conn.sendall("User not found.".encode(FORMAT))
                 return
 
-        print(connection)
+        # print(connection)
 
         # Encrypt contact user's public key with server's private key
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,

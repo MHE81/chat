@@ -88,10 +88,11 @@ def sign_up():
             if password == password_confirm:  # condition to exit from signup information loop
                 print("Passwords matched. ✅")
                 break
+            else:
+                print("------<<<<Passwords didn't matched try again >>>>------")
 
         role = Role.BEGINNER_USER
-        user_1 = User(email=email, username=username, password=password, role=role,
-                      client_listener_port=client_port)
+        user_1 = User(email=email, username=username, password=password, role=role)
         useer_data = user_1.toJson()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(ADDR)
@@ -260,29 +261,27 @@ def p2p_client(conn, addr):
         # step x+1 verify with client A's public key
 
 
-def accept_connection(s):
-    while True:
-        conn, addr = s.accept()
-        threading.Thread(target=p2p_client, args=(conn, addr)).start()
-
-
 def server_side_of_client():
     global client_port
 
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            client_port: int = random.randint(0, 65536)
-            s.bind(('localhost', client_port))
-            print(f"[Client listening on port {client_port}]")
-            s.listen()
-            accept_connection(s)
-    except socket.error as e:
-        if e.errno == socket.errno.EADDRINUSE:
-            print(f"Port {client_port} is already in use.")
-        elif e.errno == socket.errno.EACCES:
-            print(f"Permission denied to bind to port {client_port}.")
-        else:
-            print(f"Failed to bind socket: {e}")
+    while True:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                client_port = random.randint(0, 65536)
+                s.bind(('localhost', client_port))
+                print(f"[Client listening on port {client_port}]")
+                s.listen()
+                while True:
+                    conn, addr = s.accept()
+                    threading.Thread(target=p2p_client, args=(conn, addr)).start()
+        except socket.error as e:
+            if e.errno == socket.errno.EADDRINUSE:
+                print(f"Port {client_port} is already in use.")
+            elif e.errno == socket.errno.EACCES:
+                print(f"Permission denied to bind to port {client_port}.")
+                return
+            else:
+                print(f"Failed to bind socket: {e}")
 
 
 def client_and_server_actions():
@@ -302,7 +301,7 @@ def client_and_server_actions():
 
 # Example usage:
 if __name__ == "__main__":
-    super_admin = system.create_super_admin()
+    super_admin = create_super_admin()
 
-    server_side_of_client()
+    threading.Thread(target=server_side_of_client).start()
     client_and_server_actions()
