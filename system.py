@@ -20,7 +20,7 @@ SERVER_IP = 'localhost'
 SERVER_PORT = 5050
 ADDR = (SERVER_IP, SERVER_PORT)
 
-RECEIVE_BUFFER_SIZE = 1024
+RECEIVE_BUFFER_SIZE = 4096
 
 
 class Role(Enum):
@@ -53,8 +53,8 @@ class Role(Enum):
 
 
 class User:
-    def __init__(self, email, username, password, role, salt='', hashed='', public_key='', private_key='',
-                 client_listener_port=None):
+    def __init__(self, email, username, password, role: str, salt='', hashed='', public_key=' ', private_key=' ',
+                 client_listener_port=0):
         self.email = email
         self.username = username
         self.password = password
@@ -64,7 +64,7 @@ class User:
         self.public_key = public_key
         self.private_key = private_key
         self.permissions = self.assign_permissions(role)
-        self.client_listener_port = client_listener_port
+        self.client_listener_port: int = client_listener_port
         """
         a port that the client listens on it so that if another client 
         asks for a p2p connection we can answer it 
@@ -92,42 +92,47 @@ class User:
                 f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role}")
 
     def toJson(self):
+        print('21')
         userModel = {
             "Email": self.email,
             "User Name": self.username,
             "Password": self.password,
             "Salt": self.salt,
             "Hash Value": self.hashed,
-            "Role": self.role.value,
-            "Public_key": self.public_key,
-            "Private_key": self.private_key,
+            "Role": self.role,
+            "Public_key": self.public_key.decode(FORMAT) if isinstance(self.public_key, bytes) else self.public_key,
+            "Private_key": self.private_key.decode(FORMAT) if isinstance(self.public_key, bytes) else self.private_key,
             "client_listener_port": self.client_listener_port
         }
         return json.dumps(userModel)
 
     @staticmethod
-    def User_fromJson(jsonString: str) -> Self or list[Self]:
+    def User_fromJson(jsonString: str) -> Self:
         """
         in this function we get a string with json format and make it
-        into a User object or a list of User objects
+        into a User object
         :param jsonString:
         :return:
         """
         model = json.loads(jsonString)
-        if isinstance(model, list):
-            users = [User(
-                email=item["Email"],
-                username=item["User Name"],
-                password=item["Password"],
-                salt=item["Salt"],
-                hashed=item["Hash Value"],
-                role=item["Role"],
-                public_key=item["Public_key"],
-                private_key=item["Private_key"],
-                client_listener_port=item["client_listener_port"]
-            ) for item in model]
-            return users
-        elif isinstance(model, dict):
+
+        # todo : we will never need to pass a list of users and
+        #  if we want to we had to send them multiple time for limited buffer size
+
+        # if isinstance(model, list):
+        #     users = [User(
+        #         email=item["Email"],
+        #         username=item["User Name"],
+        #         password=item["Password"],
+        #         salt=item["Salt"],
+        #         hashed=item["Hash Value"],
+        #         role=item["Role"],
+        #         public_key=item["Public_key"].encode(FORMAT),
+        #         private_key=item["Private_key"].encode(FORMAT),
+        #         client_listener_port=int(item["client_listener_port"])
+        #     ) for item in model]
+        #     return users
+        if isinstance(model, dict):
             return User(
                 email=model["Email"],
                 username=model["User Name"],
@@ -135,9 +140,9 @@ class User:
                 salt=model["Salt"],
                 hashed=model["Hash Value"],
                 role=model["Role"],
-                public_key=model["Public_key"],
-                private_key=model["Private_key"],
-                client_listener_port=model["client_listener_port"]
+                public_key=model["Public_key"].encode(FORMAT),
+                private_key=model["Private_key"].encode(FORMAT),
+                client_listener_port=int(model["client_listener_port"])
             )
         # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
 
@@ -296,7 +301,7 @@ class ChatSystem:
             conn.sendall("Here is your key:".encode(FORMAT))
             # print(self.users, "hello")
             # public_key, private_key = generate_key_pair()
-            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=512)
             public_key = private_key.public_key()
             # Serialize private key
             private_pem = private_key.private_bytes(
@@ -353,7 +358,7 @@ class ChatSystem:
                     conn.sendall("Login successful".encode(FORMAT))
                     # in here when we make sure that if the client logged in successfully
                     # we will set the client port too
-                    user.client_listener_port = conn.recv(RECEIVE_BUFFER_SIZE)
+                    user.client_listener_port = int(conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
                     # we will send the User data to client
                     conn.sendall(user.toJson().encode(FORMAT))
                     return
@@ -403,12 +408,8 @@ class ChatSystem:
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
                                                            message=str(dest_user.public_key))
 
-        dest_info = json.dumps({
-            "connection_port_b": dest_user.client_listener_port,
-            "public_key": dest_user.public_key
-        })
         conn.sendall(signature_pub_b)  # send encrypted public key of client B
-        conn.sendall(str(dest_user.public_key).encode(FORMAT))  # send encode
+        conn.sendall((str(dest_user.public_key) + ":" + str(dest_user.client_listener_port)).encode(FORMAT))  # send encode client B's listener port and public key's plain text
 
         return
 

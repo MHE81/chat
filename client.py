@@ -1,8 +1,9 @@
 import ast
 import hashlib
+import json
 import random
 import string
-from system import User, ChatSystem, key_fromJson, Key
+from system import User, ChatSystem, key_fromJson, Key, Role
 import socket
 import threading
 # import json
@@ -20,17 +21,10 @@ global client_port
 global MyUser
 """this is the User class that contains data of my user after we logged in"""
 
-RECEIVE_BUFFER_SIZE = 1024
+RECEIVE_BUFFER_SIZE = 4096
 
 with open('server_public_key.pem', 'rb') as f:
     server_public_key = serialization.load_pem_public_key(f.read())
-
-
-class Role(Enum):
-    SUPER_ADMIN = "super admin"
-    ADMIN = "admin"
-    ADVANCED_USER = "advanced user"
-    BEGINNER_USER = "beginner user"
 
 
 def create_super_admin():
@@ -42,7 +36,7 @@ def create_super_admin():
         username = input("Enter your username: ")
         password = input("Enter your password: ")
         password_confirm = input("Confirm your password: ")
-        role = Role.SUPER_ADMIN
+        role = Role.SUPER_ADMIN.value
         if password == password_confirm:
             print("Passwords matched. ✅")
             break
@@ -91,7 +85,7 @@ def sign_up():
             else:
                 print("------<<<<Passwords didn't matched try again >>>>------")
 
-        role = Role.BEGINNER_USER
+        role = Role.BEGINNER_USER.value
         user_1 = User(email=email, username=username, password=password, role=role)
         useer_data = user_1.toJson()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -140,7 +134,7 @@ def verify_signature(public_key, message, signature):
     try:
         public_key.verify(
             signature,
-            message.encode('utf-8'),  # Ensure the message is in bytes
+            message.encode(FORMAT),  # Ensure the message is in bytes
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
@@ -169,11 +163,12 @@ def private_chat(username):
                 if massage == "User is found":
                     signature_pub_b = s.recv(RECEIVE_BUFFER_SIZE)
                     print(signature_pub_b)
-                    public_key_user_B = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                    info = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
+                    public_key_user_B, client_B_listener_port = info[0], info[1]
 
-                    authorized = SignUpSystem.verify_signature(public_key=server_public_key,
-                                                               message=public_key_user_B,
-                                                               signature=signature_pub_b)
+                    authorized = verify_signature(public_key=server_public_key,
+                                                  message=public_key_user_B,
+                                                  signature=signature_pub_b)
 
                     if not authorized:
                         print("Invalid signature")
@@ -203,10 +198,12 @@ def login():
                 print(massage)
                 # send listener port of client
                 s.sendall(str(client_port).encode(FORMAT))
-                MyUser = User.User_fromJson(s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
+                myuser_jsonString = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                print(myuser_jsonString)
+                MyUser = User.User_fromJson(myuser_jsonString)
                 choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
                 if choice == 1:
-                    SignUpSystem.private_chat(username)
+                    private_chat(username)
                 if choice == 2:
                     pass
                 if choice == 3:
@@ -216,7 +213,7 @@ def login():
                 return
 
 
-def show_users(self):
+def show_users():
     pass
 
 
@@ -254,8 +251,6 @@ def p2p_client(conn, addr):
         # step 2 ask form server for client A's public key
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(ADDR)
-
-
 
         # step x decrypt with client B's private key
 
