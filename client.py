@@ -13,9 +13,9 @@ from enum import Enum
 
 FORMAT = 'utf_8'
 
-SERVER_IP = 'localhost'
+MY_IP = 'localhost'
 SERVER_PORT = 5050
-ADDR = (SERVER_IP, SERVER_PORT)
+ADDR = (MY_IP, SERVER_PORT)
 
 global client_port
 global MyUser
@@ -130,51 +130,45 @@ def sign_up():
             break
 
 
-def verify_signature(public_key, message, signature):
-    try:
-        public_key.verify(
-            signature,
-            message.encode(FORMAT),  # Ensure the message is in bytes
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
-        )
-        print("Signature is valid.")
-        return True
-    except InvalidSignature:
-        print("Signature is invalid.")
-        return False
-
-
 def private_chat(username):
     while True:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(ADDR)
-            s.sendall("private chat".encode(FORMAT))
-            receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.connect(ADDR)
+            server_socket.sendall("private chat".encode(FORMAT))
+            receive = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
-                s.sendall(username.encode(FORMAT))
+                server_socket.sendall(username.encode(FORMAT))
                 contact_username = str(input("Chat with: "))
-                s.sendall(contact_username.encode(FORMAT))
-                massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                server_socket.sendall(contact_username.encode(FORMAT))
+                massage = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(massage)
                 if massage == "User is found":
-                    signature_pub_b = s.recv(RECEIVE_BUFFER_SIZE)
-                    print(signature_pub_b)
-                    info = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
+                    signature_pub_b = server_socket.recv(RECEIVE_BUFFER_SIZE)
+                    info = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
                     public_key_user_B, client_B_listener_port = info[0], info[1]
-
-                    authorized = verify_signature(public_key=server_public_key,
-                                                  message=public_key_user_B,
-                                                  signature=signature_pub_b)
+                    print(info)
+                    authorized = ChatSystem.verify_signature(public_key=server_public_key,
+                                                             message=public_key_user_B,
+                                                             signature=signature_pub_b)
 
                     if not authorized:
                         print("Invalid signature")
                         return
-                    print("done")
-                    # todo : we had to communicate with client B in this part
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_b_socket:
+                        client_b_socket.connect((MY_IP, client_B_listener_port))
+                        message = input("Enter your private message: ")
+
+                        # sign the message using client A's private key
+                        signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
+                                                                          message=message)
+
+                        # encrypt the sign message with client B's public key
+                        encrypted_message = ChatSystem.encrypt_with_public_key(public_key=public_key_user_B,
+                                                                               message=signed_message)
+
+                        # send the data to client B
+                        client_b_socket.sendall(encrypted_message)
+
 
                 elif massage == "User not found.":
                     continue
@@ -243,7 +237,7 @@ def p2p_client(conn, addr):
 
     # step 1: get encrypted signed message
     while True:
-        encryped_message = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
         if not message:
             break
@@ -251,6 +245,7 @@ def p2p_client(conn, addr):
         # step 2 ask form server for client A's public key
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(ADDR)
+            print("listened successfully")
 
         # step x decrypt with client B's private key
 

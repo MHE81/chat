@@ -368,9 +368,9 @@ class ChatSystem:
         # conn.sendall("User not found.".encode(FORMAT))
 
     @staticmethod
-    def decrypt_with_public_key(public_key, encrypted_data):
-        return public_key.decrypt(
-            encrypted_data,
+    def encrypt_with_public_key(public_key, message: str) -> bytes:
+        return public_key.encrypt(
+            message,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -379,7 +379,18 @@ class ChatSystem:
         )
 
     @staticmethod
-    def sign_with_private_key(private_key, message) -> bytes:
+    def decrypt_with_private_key(private_key, encrypted_data: bytes) -> str:
+        return private_key.decrypt(
+            encrypted_data,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        ).decode(FORMAT)
+
+    @staticmethod
+    def sign_with_private_key(private_key: bytes, message: str) -> bytes:
         signature = private_key.sign(
             message.encode('utf-8'),  # Ensure the message is in bytes
             padding.PSS(
@@ -389,6 +400,24 @@ class ChatSystem:
             hashes.SHA256()
         )
         return signature
+
+    @staticmethod
+    def verify_signature(public_key, message, signature) -> bool:
+        try:
+            public_key.verify(
+                signature,
+                message.encode(FORMAT),  # Ensure the message is in bytes
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            print("Signature is valid.")
+            return True
+        except InvalidSignature:
+            print("Signature is invalid.")
+            return False
 
     def private_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
@@ -409,7 +438,8 @@ class ChatSystem:
                                                            message=str(dest_user.public_key))
 
         conn.sendall(signature_pub_b)  # send encrypted public key of client B
-        conn.sendall((str(dest_user.public_key) + ":" + str(dest_user.client_listener_port)).encode(FORMAT))  # send encode client B's listener port and public key's plain text
+        conn.sendall((str(dest_user.public_key) + ":" + str(dest_user.client_listener_port)).encode(
+            FORMAT))  # send encode client B's listener port and public key's plain text
 
         return
 
