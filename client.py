@@ -3,6 +3,8 @@ import hashlib
 import json
 import random
 import string
+
+import system
 from system import User, ChatSystem, key_fromJson, Key, Role
 import socket
 import threading
@@ -21,7 +23,7 @@ global client_port
 global MyUser
 """this is the User class that contains data of my user after we logged in"""
 
-RECEIVE_BUFFER_SIZE = 4096
+RECEIVE_BUFFER_SIZE = system.RECEIVE_BUFFER_SIZE
 
 with open('server_public_key.pem', 'rb') as f:
     server_public_key = serialization.load_pem_public_key(f.read())
@@ -56,13 +58,7 @@ def create_super_admin():
             if massage == "Here is your key:":
                 keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 s.sendall("keys arrived".encode(FORMAT))
-                print(keys)
-                # user_keys = key_fromJson(keys)
-                # print(user_keys)
                 user_list.extend([username, keys])
-                print(user_list)
-                # signed = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                # s.sendall("got the sign".encode(FORMAT))
                 success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(success)
     return user_list
@@ -93,7 +89,6 @@ def sign_up():
             s.sendall("sign up".encode(FORMAT))
             receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
-                print(useer_data, "hello")
                 s.sendall(useer_data.encode(FORMAT))
                 massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(massage)
@@ -105,25 +100,12 @@ def sign_up():
                     # userr.username = input("Enter your username: ")
                     # s.sendall(userr.username.encode(FORMAT))
                     continue
-                # keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                # # print(keys)
-                # user_keys = key_fromJson(keys)
-                # # print(user_keys)
-                # user_list.extend([username, user_keys])
-                # # print(user_list)
                 elif massage == "Here is your key:":
-                    # print(useer_data)
-                    # s.sendall(useer_data.encode(FORMAT))
                     keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                    # print(keys, "hello")
                     s.sendall("keys arrived".encode(FORMAT))
                     print(keys)
-                    # user_keys = key_fromJson(keys)
-                    # print(user_keys)
                     user_list.extend([username, keys])
                     print(user_list)
-                    # signed = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                    # s.sendall("got the sign".encode(FORMAT))
                     success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                     print(success)
                     break
@@ -138,22 +120,24 @@ def private_chat(username):
             receive = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
                 server_socket.sendall(username.encode(FORMAT))
-                contact_username = str(input("Chat with: "))
+                contact_username = input("Chat with: ")
                 server_socket.sendall(contact_username.encode(FORMAT))
                 massage = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(massage)
                 if massage == "User is found":
-                    signature_pub_b = server_socket.recv(RECEIVE_BUFFER_SIZE)
+                    signature_pub_b_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
                     info = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
-                    public_key_user_B, client_B_listener_port = info[0], info[1]
-                    print(info)
+
+                    public_key_pem_user_B, client_B_listener_port = info[0], int(info[1])
+
                     authorized = ChatSystem.verify_signature(public_key=server_public_key,
-                                                             message=public_key_user_B,
-                                                             signature=signature_pub_b)
+                                                             message=public_key_pem_user_B,
+                                                             signature=signature_pub_b_pem)
 
                     if not authorized:
-                        print("Invalid signature")
                         return
+
+                    public_key_user_B = serialization.load_pem_public_key(public_key_pem_user_B.encode(FORMAT))
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_b_socket:
                         client_b_socket.connect((MY_IP, client_B_listener_port))
                         message = input("Enter your private message: ")
@@ -161,14 +145,16 @@ def private_chat(username):
                         # sign the message using client A's private key
                         signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
                                                                           message=message)
+                        print("public_key_pem_user_B", public_key_pem_user_B)
+                        print("signed message", signed_message)
+                        print("type(signed_message)", type(signed_message))
 
                         # encrypt the sign message with client B's public key
                         encrypted_message = ChatSystem.encrypt_with_public_key(public_key=public_key_user_B,
-                                                                               message=signed_message)
+                                                                               mess_in_byte=signed_message)
 
                         # send the data to client B
                         client_b_socket.sendall(encrypted_message)
-
 
                 elif massage == "User not found.":
                     continue
@@ -192,9 +178,9 @@ def login():
                 print(massage)
                 # send listener port of client
                 s.sendall(str(client_port).encode(FORMAT))
-                myuser_jsonString = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                print(myuser_jsonString)
-                MyUser = User.User_fromJson(myuser_jsonString)
+                my_user_jsonString = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                print(my_user_jsonString)
+                MyUser = User.User_fromJson(my_user_jsonString)
                 choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
                 if choice == 1:
                     private_chat(username)
@@ -239,7 +225,7 @@ def p2p_client(conn, addr):
     while True:
         encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
-        if not message:
+        if not encrypted_message:
             break
 
         # step 2 ask form server for client A's public key

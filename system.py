@@ -1,6 +1,7 @@
 import json
 import pickle
 import random
+from cryptography.exceptions import InvalidSignature
 from math import gcd
 import socket
 import threading
@@ -64,6 +65,19 @@ class User:
         self.public_key = public_key
         self.private_key = private_key
         self.permissions = self.assign_permissions(role)
+        self.private_key_pem = " "
+        self.public_key_pem = " "
+        if private_key != ' ':
+            self.private_key_pem = self.private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            self.public_key_pem = self.public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+
         self.client_listener_port: int = client_listener_port
         """
         a port that the client listens on it so that if another client 
@@ -92,7 +106,6 @@ class User:
                 f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role}")
 
     def toJson(self):
-        print('21')
         userModel = {
             "Email": self.email,
             "User Name": self.username,
@@ -100,8 +113,10 @@ class User:
             "Salt": self.salt,
             "Hash Value": self.hashed,
             "Role": self.role,
-            "Public_key": self.public_key.decode(FORMAT) if isinstance(self.public_key, bytes) else self.public_key,
-            "Private_key": self.private_key.decode(FORMAT) if isinstance(self.public_key, bytes) else self.private_key,
+            "Public_key_pem": self.public_key_pem if isinstance(self.public_key_pem,
+                                                                str) else self.public_key_pem.decode(FORMAT),
+            "Private_key_pem": self.private_key_pem if isinstance(self.private_key_pem,
+                                                                  str) else self.private_key_pem.decode(FORMAT),
             "client_listener_port": self.client_listener_port
         }
         return json.dumps(userModel)
@@ -115,7 +130,6 @@ class User:
         :return:
         """
         model = json.loads(jsonString)
-
         # todo : we will never need to pass a list of users and
         #  if we want to we had to send them multiple time for limited buffer size
 
@@ -133,6 +147,12 @@ class User:
         #     ) for item in model]
         #     return users
         if isinstance(model, dict):
+            R_pem = model["Private_key_pem"]
+            U_pem = model["Public_key_pem"]
+            private_key = R_pem if R_pem == " " else serialization.load_pem_private_key(R_pem.encode(FORMAT),
+                                                                                        password=None)
+            public_key = U_pem if U_pem == " " else serialization.load_pem_public_key(U_pem.encode(FORMAT))
+
             return User(
                 email=model["Email"],
                 username=model["User Name"],
@@ -140,8 +160,8 @@ class User:
                 salt=model["Salt"],
                 hashed=model["Hash Value"],
                 role=model["Role"],
-                public_key=model["Public_key"].encode(FORMAT),
-                private_key=model["Private_key"].encode(FORMAT),
+                public_key=public_key,
+                private_key=private_key,
                 client_listener_port=int(model["client_listener_port"])
             )
         # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
@@ -165,7 +185,7 @@ class Key:
         self.public_key = public_key
         self.private_key = private_key
 
-    def key_toJason(self):
+    def key_toJson(self):
         key_model = {
             "Public_key": self.public_key,
             "Private_key": self.private_key
@@ -216,7 +236,7 @@ class Public_keys:
         self.username = username
         self.pub = public_key
 
-    def pub_toJason(self):
+    def pub_toJson(self):
         pub_model = {
             "User_name": self.username,
             "Public_key": self.pub
@@ -277,7 +297,7 @@ class ChatSystem:
         conn.sendall("command received".encode(FORMAT))
         new_user_data = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         print(f"Received User info: {new_user_data}")
-        new_user = User.User_fromJson(new_user_data)
+        new_user: User = User.User_fromJson(new_user_data)
         new_user.salt = generate_random_charset(8)
         salted_pass = new_user.password + str(new_user.salt)
         new_user.hashed = hashlib.sha256(salted_pass.encode(FORMAT)).hexdigest()
@@ -315,29 +335,19 @@ class ChatSystem:
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
 
-            # keys = Key(public_pem, private_pem)
-            # key = str(keys)
-            # user_keys = key.key_toJason()
             conn.sendall(f"{private_pem}".encode(FORMAT))
             key_arrive = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if key_arrive == "keys arrived":
-                new_user.public_key = public_pem
-                new_user.private_key = private_pem
+                new_user.public_key_pem = public_pem
+                new_user.private_key_pem = private_pem
                 pub = Public_keys(new_user.username, new_user.public_key)
                 self.public_keys_list.append(pub)
                 print(self.public_keys_list)
                 self.users.append(new_user)
                 print(new_user.public_key, "helloooooo")
-                # unsigned_key = str(new_user.username+ new_user.public_key)
-                print(self.users[0])
-                # signed = sign(unsigned_key, self.users[0].private_key)
-                # conn.sendall(signed.encode(FORMAT))
-                # finish = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                # if finish == "got the sign":
-                #     print(public_key, private_key)
                 conn.sendall("User successfully registered.".encode(FORMAT))
-                new_user.public_key = public_pem
-                new_user.private_key = private_pem
+                new_user.public_key = public_key
+                new_user.private_key = private_key
                 # self.users.append(new_user)
                 print(self.users)
                 return 'b'
@@ -368,9 +378,9 @@ class ChatSystem:
         # conn.sendall("User not found.".encode(FORMAT))
 
     @staticmethod
-    def encrypt_with_public_key(public_key, message: str) -> bytes:
+    def encrypt_with_public_key(public_key, mess_in_byte: bytes) -> bytes:
         return public_key.encrypt(
-            message,
+            mess_in_byte,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -390,9 +400,9 @@ class ChatSystem:
         ).decode(FORMAT)
 
     @staticmethod
-    def sign_with_private_key(private_key: bytes, message: str) -> bytes:
+    def sign_with_private_key(private_key, message: str) -> bytes:
         signature = private_key.sign(
-            message.encode('utf-8'),  # Ensure the message is in bytes
+            message.encode(FORMAT),  # Ensure the message is in bytes
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
@@ -402,7 +412,7 @@ class ChatSystem:
         return signature
 
     @staticmethod
-    def verify_signature(public_key, message, signature) -> bool:
+    def verify_signature(public_key, message: str, signature: bytes) -> bool:
         try:
             public_key.verify(
                 signature,
@@ -435,10 +445,10 @@ class ChatSystem:
 
         # Encrypt contact user's public key with server's private key
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
-                                                           message=str(dest_user.public_key))
-
+                                                           message=dest_user.public_key_pem.decode(FORMAT))
+        print("dest_user.public_key_pem.decode(FORMAT)", dest_user.public_key_pem.decode(FORMAT))
         conn.sendall(signature_pub_b)  # send encrypted public key of client B
-        conn.sendall((str(dest_user.public_key) + ":" + str(dest_user.client_listener_port)).encode(
+        conn.sendall((dest_user.public_key_pem.decode(FORMAT) + ":" + str(dest_user.client_listener_port)).encode(
             FORMAT))  # send encode client B's listener port and public key's plain text
 
         return
