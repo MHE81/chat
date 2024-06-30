@@ -21,7 +21,7 @@ SERVER_IP = 'localhost'
 SERVER_PORT = 5050
 ADDR = (SERVER_IP, SERVER_PORT)
 
-RECEIVE_BUFFER_SIZE = 4096
+RECEIVE_BUFFER_SIZE = 4096 * 2
 
 
 class Role(Enum):
@@ -54,7 +54,8 @@ class Role(Enum):
 
 
 class User:
-    def __init__(self, email, username, password, role: str, salt='', hashed='', public_key=' ', private_key=' ',
+    def __init__(self, email: str, username: str, password: str, role: str, salt='', hashed='', public_key=' ',
+                 private_key=' ',
                  client_listener_port=0):
         self.email = email
         self.username = username
@@ -211,7 +212,6 @@ def key_fromJson(JsonString):
         ) for item in model]
         return keys
     else:
-        print(model)
         return Key(
             public_key=model["Public_key"],
             private_key=model["Private_key"]
@@ -227,41 +227,38 @@ def generate_random_charset(length):
 
 
 class Public_keys:
-    def __init__(self, username, public_key):
+    def __init__(self, public_key_pem: bytes, username: str = "server"):
         """
         an object made by username and its public key
         :param username:
-        :param public_key:
+        :param public_key_pem:
         """
         self.username = username
-        self.pub = public_key
+        self.pub_pem: bytes = public_key_pem
 
     def pub_toJson(self):
         pub_model = {
             "User_name": self.username,
-            "Public_key": self.pub
+            "Public_key_pem": self.pub_pem.decode(FORMAT)
         }
         return json.dumps(pub_model)
 
     def __repr__(self):
-        return f"Public_keys(Username={self.username}, Pub={self.pub}"
+        return f"Public_keys(Username={self.username}, Pub={self.pub_pem}"
 
 
 def pub_fromJson(JsonString):
     model = json.loads(JsonString)
-    # print(model)
     if isinstance(model, list):
-        # print(model)
         pubs = [Public_keys(
             username=item["User_name"],
-            public_key=item["Public_key"]
+            public_key_pem=item["Public_key_pem"].encode(FORMAT)
         ) for item in model]
         return pubs
     else:
-        print(model)
         return Public_keys(
             username=model["User_name"],
-            public_key=model["Public_key"]
+            public_key_pem=model["Public_key_pem"].encode(FORMAT)
         )
 
 
@@ -288,7 +285,7 @@ class ChatSystem:
         with open('server_public_key.pem', 'wb') as f:
             f.write(self.server_public_pem)
 
-        self.public_keys_list = []
+        self.public_keys_list: list[Public_keys] = []
         """
         a list of Public_keys class
         """
@@ -319,9 +316,7 @@ class ChatSystem:
         #     break
         else:
             conn.sendall("Here is your key:".encode(FORMAT))
-            # print(self.users, "hello")
-            # public_key, private_key = generate_key_pair()
-            private_key = rsa.generate_private_key(public_exponent=65537, key_size=512)
+            private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             public_key = private_key.public_key()
             # Serialize private key
             private_pem = private_key.private_bytes(
@@ -340,16 +335,13 @@ class ChatSystem:
             if key_arrive == "keys arrived":
                 new_user.public_key_pem = public_pem
                 new_user.private_key_pem = private_pem
-                pub = Public_keys(new_user.username, new_user.public_key)
+                pub = Public_keys(public_key_pem=new_user.public_key_pem, username=new_user.username)
                 self.public_keys_list.append(pub)
-                print(self.public_keys_list)
                 self.users.append(new_user)
-                print(new_user.public_key, "helloooooo")
                 conn.sendall("User successfully registered.".encode(FORMAT))
                 new_user.public_key = public_key
                 new_user.private_key = private_key
                 # self.users.append(new_user)
-                print(self.users)
                 return 'b'
         return 'b'
 
@@ -389,9 +381,9 @@ class ChatSystem:
         )
 
     @staticmethod
-    def decrypt_with_private_key(private_key, encrypted_data: bytes) -> str:
+    def decrypt_with_private_key(private_key, encrypted_message: bytes) -> str:
         return private_key.decrypt(
-            encrypted_data,
+            encrypted_message,
             padding.OAEP(
                 mgf=padding.MGF1(algorithm=hashes.SHA256()),
                 algorithm=hashes.SHA256(),
@@ -400,9 +392,9 @@ class ChatSystem:
         ).decode(FORMAT)
 
     @staticmethod
-    def sign_with_private_key(private_key, message: str) -> bytes:
+    def sign_with_private_key(private_key, mess_in_byte: bytes) -> bytes:
         signature = private_key.sign(
-            message.encode(FORMAT),  # Ensure the message is in bytes
+            mess_in_byte,  # Ensure the message is in bytes
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
@@ -412,18 +404,17 @@ class ChatSystem:
         return signature
 
     @staticmethod
-    def verify_signature(public_key, message: str, signature: bytes) -> bool:
+    def verify_signature(public_key, mess_in_byte: bytes, signature: bytes) -> bool:
         try:
             public_key.verify(
                 signature,
-                message.encode(FORMAT),  # Ensure the message is in bytes
+                mess_in_byte,  # Ensure the message is in bytes
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
                     salt_length=padding.PSS.MAX_LENGTH
                 ),
                 hashes.SHA256()
             )
-            print("Signature is valid.")
             return True
         except InvalidSignature:
             print("Signature is invalid.")
@@ -445,19 +436,41 @@ class ChatSystem:
 
         # Encrypt contact user's public key with server's private key
         signature_pub_b = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
-                                                           message=dest_user.public_key_pem.decode(FORMAT))
-        print("dest_user.public_key_pem.decode(FORMAT)", dest_user.public_key_pem.decode(FORMAT))
+                                                           mess_in_byte=dest_user.public_key_pem)
         conn.sendall(signature_pub_b)  # send encrypted public key of client B
         conn.sendall((dest_user.public_key_pem.decode(FORMAT) + ":" + str(dest_user.client_listener_port)).encode(
             FORMAT))  # send encode client B's listener port and public key's plain text
 
         return
 
+    def get_public_key_by_username(self, conn, client_A_username) -> bytes or None:
+
+        for user_key in self.public_keys_list:
+            if user_key.username == client_A_username:
+                print("found the public key for client A")
+                return user_key.pub_pem
+        else:
+            print("the public key of source client didn't found")
+            return None
+
+    def send_public_key(self, conn):
+        print("sending public key")
+
+        conn.sendall("command received".encode(FORMAT))
+        client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        public_key_pem = self.get_public_key_by_username(conn=conn, client_A_username=client_A_username)
+
+        if public_key_pem:
+            signed_public_key = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
+                                                                 mess_in_byte=public_key_pem)
+            conn.sendall(signed_public_key)
+            response = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            if response == "signed public key received":
+                conn.sendall(public_key_pem)
+
     def handle_client(self, conn, addr):
-        # server_pub, server_pri = generate_key_pair()
-        print("server:", self.server_public_pem, self.server_private_pem)
         print(f"Connected by {addr}")
-        self.public_keys_list.append(self.server_public_pem)
         while True:
             data = conn.recv(RECEIVE_BUFFER_SIZE)
 
@@ -486,8 +499,11 @@ class ChatSystem:
             if command == "private chat":
                 self.private_chat_method(conn)
 
+            if command == "ask for public key":
+                self.send_public_key(conn)
+
     def start_server(self):
-        self.public_keys_list.append(self.server_public_key)
+        self.public_keys_list.append(Public_keys(self.server_public_pem))
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(ADDR)

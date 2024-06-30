@@ -1,30 +1,55 @@
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.backends import default_backend
 
-# ایجاد کلید خصوصی
+# ساخت یک جفت کلید RSA جدید
 private_key = rsa.generate_private_key(
     public_exponent=65537,
-    key_size=2048
+    key_size=512,
+    backend=default_backend()
 )
-
-# استخراج کلید عمومی از کلید خصوصی
 public_key = private_key.public_key()
 
-# ذخیره کلید خصوصی به صورت PEM
-private_pem = private_key.private_bytes(
-    encoding=serialization.Encoding.PEM,
-    format=serialization.PrivateFormat.PKCS8,
-    encryption_algorithm=serialization.NoEncryption()
-)
-with open('private_key.pem', 'wb') as f:
-    f.write(private_pem)
-
-# ذخیره کلید عمومی به صورت PEM
-public_pem = public_key.public_bytes(
+# سریالیز کردن کلید عمومی به فرمت PEM
+public_key_pem = public_key.public_bytes(
     encoding=serialization.Encoding.PEM,
     format=serialization.PublicFormat.SubjectPublicKeyInfo
 )
-with open('public_key.pem', 'wb') as f:
-    f.write(public_pem)
+print("Generated Public Key:\n", public_key_pem.decode())
 
-print("Keys have been generated and saved.")
+
+# تابعی برای رمزگذاری پیام با استفاده از کلید عمومی
+def encrypt_with_public_key(public_key, mess_in_byte: bytes) -> bytes:
+    try:
+        encrypted = public_key.encrypt(
+            mess_in_byte,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return encrypted
+    except Exception as e:
+        print("Encryption failed:", str(e))
+        raise
+
+
+# دریافت پیام از کاربر
+message = input("write your message: ")
+
+# اطمینان از اینکه پیام به بایت‌ها تبدیل شده است
+try:
+    encoded_message = message.encode('utf-8')
+    print("پیام به بایت‌ها تبدیل شد:", encoded_message)
+except Exception as e:
+    print("شکست در تبدیل پیام به بایت‌ها:", str(e))
+    raise
+
+# رمزگذاری پیام با استفاده از کلید عمومی جدید
+try:
+    encrypted_message = encrypt_with_public_key(public_key=public_key, mess_in_byte=encoded_message)
+    print("encrypted message", encrypted_message)
+except ValueError as e:
+    print("شکست در رمزگذاری:", str(e))
+    raise
