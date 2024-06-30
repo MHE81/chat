@@ -4,6 +4,7 @@ from tkinter import ttk
 
 class NumberApp:
     def __init__(self, root):
+        self.additional_entry = None
         self.root = root
         self.root.title("Number Entry with Messages")
         self.private_chat_window = None
@@ -100,8 +101,8 @@ class NumberApp:
         self.logout_button = ttk.Button(self.button_frame, text="Logout")
         self.logout_button.grid(row=0, column=2, padx=5, pady=5)
 
-        self.add_entry_button = ttk.Button(self.root, text="Add Entry", command=self.add_entry)
-        self.add_entry_button.grid(row=1, column=0, padx=5, pady=5)
+        # self.add_entry_button = ttk.Button(self.root, text="Add Entry", command=self.add_entry)
+        # self.add_entry_button.grid(row=1, column=0, padx=5, pady=5)
 
         self.add_chat_button = ttk.Button(self.root, text="Add Chat", command=self.add_chat)
         self.add_chat_button.grid(row=1, column=3, padx=5, pady=5)
@@ -110,14 +111,16 @@ class NumberApp:
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')
         self.chat_frame.grid(row=2, column=3, padx=5, pady=5, sticky='ne')
 
-    def add_entry(self):
+    def add_entry(self, message="", response_msg=""):
         entry = ttk.Entry(self.entry_frame)
         entry.grid(row=self.entry_row_counter, column=0, padx=5, pady=5)
+        entry.insert(0, message)
         entry.grid_remove()  # Hide initially
         self.entries.append(entry)
 
         text_field = ttk.Entry(self.entry_frame)
         text_field.grid(row=self.entry_row_counter, column=1, padx=5, pady=5)
+        text_field.insert(0, response_msg)
         text_field.grid_remove()
         self.text_fields.append(text_field)
 
@@ -127,7 +130,7 @@ class NumberApp:
         send_button.grid_remove()
         self.send_buttons.append(send_button)
 
-        self.root.after(1000, self.show_and_fill_entry, len(self.entries) - 1, str(len(self.entries)))
+        self.root.after(0, self.show_and_fill_entry, len(self.entries) - 1, str(len(self.entries)))
         self.entry_row_counter += 1
 
     def add_chat(self):
@@ -149,7 +152,7 @@ class NumberApp:
 
     def show_and_fill_entry(self, index, number):
         self.entries[index].grid()  # Show the entry
-        self.entries[index].insert(0, number)
+        # self.entries[index].insert(0, number)
         self.entries[index].config(state='readonly')  # Make the entry unchangeable
         self.text_fields[index].grid()
         self.send_buttons[index].grid()
@@ -164,18 +167,29 @@ class NumberApp:
         self.private_chat_window = tk.Toplevel(self.root)
         self.private_chat_window.title("Private Chat")
 
+        # Create label and entry widgets
+        label_additional_info = ttk.Label(self.private_chat_window, text="Additional Information:")
+        label_additional_info.grid(row=0, column=0, padx=5, pady=5)
+
+        self.additional_entry = ttk.Entry(self.private_chat_window)
+        self.additional_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        label_message = ttk.Label(self.private_chat_window, text="Enter your message:")
+        label_message.grid(row=1, column=0, padx=5, pady=5)
+
         self.message_text = tk.Text(self.private_chat_window, height=10, width=40)
-        self.message_text.grid(row=0, column=0, columnspan=2, padx=5, pady=5)
+        self.message_text.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
 
         self.send_button = ttk.Button(self.private_chat_window, text="Send", command=self.send_private_message)
-        self.send_button.grid(row=1, column=0, padx=5, pady=5)
+        self.send_button.grid(row=3, column=0, padx=5, pady=5)
 
         self.cancel_button = ttk.Button(self.private_chat_window, text="Cancel",
                                         command=self.private_chat_window.destroy)
-        self.cancel_button.grid(row=1, column=1, padx=5, pady=5)
+        self.cancel_button.grid(row=3, column=1, padx=5, pady=5)
 
     def send_private_message(self):
         message = self.message_text.get("1.0", tk.END).strip()
+        self.add_entry(message=message)
         if message:
             print(f"Private message sent: {message}")
             self.private_chat_window.destroy()
