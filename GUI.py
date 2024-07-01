@@ -4,7 +4,7 @@ from tkinter import ttk
 
 class NumberApp:
     def __init__(self, root):
-        self.additional_entry = None
+        self.target_username_entry = None
         self.root = root
         self.root.title("Number Entry with Messages")
         self.private_chat_window = None
@@ -13,7 +13,6 @@ class NumberApp:
         self.create_button = None
         self.cancel_button = None
         self.add_entry_button = None
-        self.logout_button = None
         self.add_chat_button = None
         self.public_chat_button = None
         self.private_chat_button = None
@@ -39,6 +38,12 @@ class NumberApp:
         self.password_entry = ttk.Entry(root, show='*')
         self.submit_button = ttk.Button(root, text="Submit", command=self.submit_credentials)
 
+        self.email_label = ttk.Label(root, text="Email")
+        self.email_entry = ttk.Entry(root)
+
+        self.confirm_password_label = ttk.Label(root, text="Confirm Password")
+        self.confirm_password_entry = ttk.Entry(root, show='*')
+
         # Frames for entries and chats
         self.entry_frame = ttk.Frame(root)
         self.chat_frame = ttk.Frame(root)
@@ -56,10 +61,18 @@ class NumberApp:
 
         # Show sign in fields
         self.username_label.grid(row=1, column=0, padx=5, pady=5)
-        self.password_label.grid(row=2, column=0, padx=5, pady=5)
         self.username_entry.grid(row=1, column=1, padx=5, pady=5)
-        self.password_entry.grid(row=2, column=1, padx=5, pady=5)
-        self.submit_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
+
+        self.email_label.grid(row=2, column=0, padx=5, pady=5)
+        self.email_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        self.password_label.grid(row=3, column=0, padx=5, pady=5)
+        self.password_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        self.confirm_password_label.grid(row=4, column=0, padx=5, pady=5)
+        self.confirm_password_entry.grid(row=4, column=1, padx=5, pady=5)
+
+        self.submit_button.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
 
     def show_login(self):
         # Hide initial buttons
@@ -73,19 +86,37 @@ class NumberApp:
         self.submit_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
     def show_users(self):
-        # Placeholder for showing users functionality
-        print("Show users functionality not implemented yet.")
+        # Create a new window (Toplevel) for showing users
+        self.user_window = tk.Toplevel(self.root)
+        self.user_window.title("User List")
+
+        # Add a text widget to display users
+        users_text = tk.Text(self.user_window, height=10, width=40)
+        users_text.insert(tk.END, "User A\nUser B\nUser C")  # Example user list
+        users_text.config(state='disabled')  # Make the text read-only
+        users_text.pack(padx=10, pady=10)
+
+        # Add a close button to close the user window
+        close_button = ttk.Button(self.user_window, text="Close", command=self.user_window.destroy)
+        close_button.pack(pady=10)
 
     def submit_credentials(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
-        print(f"Username: {username}, Password: {password}")
+        email = self.email_entry.get()
+        confirm_password = self.confirm_password_entry.get()
 
-        # Hide sign in/log in fields
+        print(f"Username: {username}, Password: {password}, Email: {email}, Confirm Password: {confirm_password}")
+
+        # Hide sign in fields
         self.username_label.grid_remove()
         self.password_label.grid_remove()
         self.username_entry.grid_remove()
         self.password_entry.grid_remove()
+        self.email_label.grid_remove()
+        self.email_entry.grid_remove()
+        self.confirm_password_label.grid_remove()
+        self.confirm_password_entry.grid_remove()
         self.submit_button.grid_remove()
 
         # Show main buttons frame
@@ -98,35 +129,31 @@ class NumberApp:
         self.public_chat_button = ttk.Button(self.button_frame, text="Public Chat", command=self.open_public_chat)
         self.public_chat_button.grid(row=0, column=1, padx=5, pady=5)
 
-        self.logout_button = ttk.Button(self.button_frame, text="Logout")
-        self.logout_button.grid(row=0, column=2, padx=5, pady=5)
-
-        # self.add_entry_button = ttk.Button(self.root, text="Add Entry", command=self.add_entry)
-        # self.add_entry_button.grid(row=1, column=0, padx=5, pady=5)
-
-        self.add_chat_button = ttk.Button(self.root, text="Add Chat", command=self.add_chat)
-        self.add_chat_button.grid(row=1, column=3, padx=5, pady=5)
 
         # Display frames
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')
         self.chat_frame.grid(row=2, column=3, padx=5, pady=5, sticky='ne')
 
-    def add_entry(self, message="", response_msg=""):
+    def add_entry(self, message="", target_username="", response_msg=""):
+        # اضافه کردن label جدید
+        label = ttk.Label(self.entry_frame, text=target_username)
+        label.grid(row=self.entry_row_counter, column=0, padx=5, pady=5)
+
         entry = ttk.Entry(self.entry_frame)
-        entry.grid(row=self.entry_row_counter, column=0, padx=5, pady=5)
+        entry.grid(row=self.entry_row_counter, column=1, padx=5, pady=5)
         entry.insert(0, message)
         entry.grid_remove()  # Hide initially
         self.entries.append(entry)
 
         text_field = ttk.Entry(self.entry_frame)
-        text_field.grid(row=self.entry_row_counter, column=1, padx=5, pady=5)
+        text_field.grid(row=self.entry_row_counter, column=2, padx=5, pady=5)
         text_field.insert(0, response_msg)
         text_field.grid_remove()
         self.text_fields.append(text_field)
 
         send_button = ttk.Button(self.entry_frame, text="Send",
                                  command=lambda i=len(self.entries) - 1: self.send_message(i))
-        send_button.grid(row=self.entry_row_counter, column=2, padx=5, pady=5)
+        send_button.grid(row=self.entry_row_counter, column=3, padx=5, pady=5)
         send_button.grid_remove()
         self.send_buttons.append(send_button)
 
@@ -168,11 +195,11 @@ class NumberApp:
         self.private_chat_window.title("Private Chat")
 
         # Create label and entry widgets
-        label_additional_info = ttk.Label(self.private_chat_window, text="Additional Information:")
-        label_additional_info.grid(row=0, column=0, padx=5, pady=5)
+        target_username_label = ttk.Label(self.private_chat_window, text="message to :")
+        target_username_label.grid(row=0, column=0, padx=5, pady=5)
 
-        self.additional_entry = ttk.Entry(self.private_chat_window)
-        self.additional_entry.grid(row=0, column=1, padx=5, pady=5)
+        self.target_username_entry = ttk.Entry(self.private_chat_window)
+        self.target_username_entry.grid(row=0, column=1, padx=5, pady=5)
 
         label_message = ttk.Label(self.private_chat_window, text="Enter your message:")
         label_message.grid(row=1, column=0, padx=5, pady=5)
@@ -189,7 +216,8 @@ class NumberApp:
 
     def send_private_message(self):
         message = self.message_text.get("1.0", tk.END).strip()
-        self.add_entry(message=message)
+        username = self.target_username_entry.get()
+        self.add_entry(message=message, target_username=username)
         if message:
             print(f"Private message sent: {message}")
             self.private_chat_window.destroy()
@@ -197,9 +225,6 @@ class NumberApp:
     def open_public_chat(self):
         self.public_chat_window = tk.Toplevel(self.root)
         self.public_chat_window.title("Public Chat")
-
-        self.entries = []  # To keep track of entry widgets in public chat
-        self.entry_row_counter = 0  # Reset counter for entries in public chat
 
         self.add_entry_button = ttk.Button(self.public_chat_window, text="Add Entry", command=self.add_public_entry)
         self.add_entry_button.grid(row=0, column=0, padx=5, pady=5)
@@ -223,6 +248,7 @@ class NumberApp:
         entries_data = [entry.get() for entry in self.entries]
         print(f"Public chat entries: {entries_data}")
         self.public_chat_window.destroy()
+        self.add_chat()
 
 
 if __name__ == "__main__":
