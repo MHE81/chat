@@ -12,6 +12,7 @@ import threading
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 from enum import Enum
+import GUI
 
 FORMAT = 'utf_8'
 
@@ -29,21 +30,17 @@ with open('server_public_key.pem', 'rb') as f:
     server_public_key = serialization.load_pem_public_key(f.read())
 
 
-def create_super_admin():
-    user_list = []
+def create_super_admin(email, username, password, password_confirm):
+    # user_list = []
 
-    while True:
-        print("Super Admin:\n")
-        email = input("Enter your email: ")
-        username = input("Enter your username: ")
-        password = input("Enter your password: ")
-        password_confirm = input("Confirm your password: ")
-        role = Role.SUPER_ADMIN.value
-        if password == password_confirm:
-            print("Passwords matched. ✅")
-            break
+    print("Super Admin:\n")
+    if password != password_confirm:
         print("password does not matched ❌")
+        return False
 
+    print("Passwords matched. ✅")
+
+    role = Role.SUPER_ADMIN.value
     admin_user = User(email=email, username=username, password=password, role=role)
     admin_user_data = admin_user.toJson()
 
@@ -58,58 +55,50 @@ def create_super_admin():
             if massage == "Here is your key:":
                 keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 s.sendall("keys arrived".encode(FORMAT))
-                user_list.extend([username, keys])
                 success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(success)
-    return user_list
+
+    return True
 
 
-def sign_up():
+def sign_up(email, username, password, password_confirm):
     global client_port
     user_list = []
-    while True:
 
-        while True:
-            email = input("Enter your email: ")
-            username = input("Enter your username: ")
-            password = input("Enter your password: ")
-            password_confirm = input("Confirm your password: ")
+    print("Super Admin:\n")
+    if password == password_confirm:
+        print("password does not matched ❌")
+        return False
 
-            if password == password_confirm:  # condition to exit from signup information loop
-                print("Passwords matched. ✅")
-                break
-            else:
-                print("------<<<<Passwords didn't matched try again >>>>------")
+    print("Passwords matched. ✅")
 
-        role = Role.BEGINNER_USER.value
-        user_1 = User(email=email, username=username, password=password, role=role)
-        useer_data = user_1.toJson()
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect(ADDR)
-            s.sendall("sign up".encode(FORMAT))
-            receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-            if receive == "command received":
-                s.sendall(useer_data.encode(FORMAT))
-                massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                print(massage)
-                if massage == "Email already exists. Please enter another email.":
-                    # userr.email = input("Enter your email: ")
-                    # s.sendall(userr.email.encode(FORMAT))
-                    continue
-                elif massage == "UserName already exists. Please enter another UserName.":
-                    # userr.username = input("Enter your username: ")
-                    # s.sendall(userr.username.encode(FORMAT))
-                    continue
-                elif massage == "Here is your key:":
-                    keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                    s.sendall("keys arrived".encode(FORMAT))
-                    print(keys)
-                    user_list.extend([username, keys])
-                    print(user_list)
-                    success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                    print(success)
-                    break
-            break
+    role = Role.BEGINNER_USER.value
+    user_1 = User(email=email, username=username, password=password, role=role)
+    useer_data = user_1.toJson()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect(ADDR)
+        s.sendall("sign up".encode(FORMAT))
+        receive = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        if receive == "command received":
+            s.sendall(useer_data.encode(FORMAT))
+            massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            print(massage)
+            if massage == "Email already exists. Please enter another email.":
+                # userr.email = input("Enter your email: ")
+                # s.sendall(userr.email.encode(FORMAT))
+                return message
+            elif massage == "UserName already exists. Please enter another UserName.":
+                # userr.username = input("Enter your username: ")
+                # s.sendall(userr.username.encode(FORMAT))
+                return message
+            elif massage == "Here is your key:":
+                keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                s.sendall("keys arrived".encode(FORMAT))
+                print(keys)
+                success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                print(success)
+                return "Done"
+        return "Done"
 
 
 def private_chat(username):
@@ -339,24 +328,27 @@ def server_side_of_client():
                 print(f"Failed to bind socket: {e}")
 
 
-def client_and_server_actions():
-    while True:
-        action = int(input("1.Sign up\t2.Login\t 3.Show Users\t4.Exit\n"))
-        if action == 1:
-            sign_up()
-        elif action == 2:
-            login()
-        elif action == 3:
-            show_users()
-        elif action == 4:
-            break
-        else:
-            print("Invalid action.")
+# def client_and_server_actions():
+#     while True:
+#         action = int(input("1.Sign up\t2.Login\t 3.Show Users\t4.Exit\n"))
+#         if action == 1:
+#             sign_up()
+#         elif action == 2:
+#             login()
+#         elif action == 3:
+#             show_users()
+#         elif action == 4:
+#             break
+#         else:
+#             print("Invalid action.")
 
 
 # Example usage:
 if __name__ == "__main__":
-    super_admin = create_super_admin()
+    # super_admin = create_super_admin()
+    root = GUI.tk.Tk()
+    app = GUI.NumberApp(root)
+    root.mainloop()
 
     threading.Thread(target=server_side_of_client).start()
     client_and_server_actions()

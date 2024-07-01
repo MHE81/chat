@@ -1,9 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
+import client
+from tkinter import messagebox
+
 
 
 class NumberApp:
     def __init__(self, root):
+        self.signup_window = None
+        self.super_user_created: bool = False
         self.target_username_entry = None
         self.root = root
         self.root.title("Number Entry with Messages")
@@ -23,8 +28,8 @@ class NumberApp:
         self.button_frame = ttk.Frame(root)
         self.button_frame.grid(row=0, column=0, columnspan=4, padx=5, pady=5)
 
-        self.signin_button = ttk.Button(self.button_frame, text="Sign In", command=self.show_signin)
-        self.signin_button.grid(row=0, column=0, padx=5, pady=5)
+        self.signup_button = ttk.Button(self.button_frame, text="sign up", command=self.show_signup)
+        self.signup_button.grid(row=0, column=0, padx=5, pady=5)
 
         self.login_button = ttk.Button(self.button_frame, text="Log In", command=self.show_login)
         self.login_button.grid(row=0, column=1, padx=5, pady=5)
@@ -38,12 +43,6 @@ class NumberApp:
         self.password_entry = ttk.Entry(root, show='*')
         self.submit_button = ttk.Button(root, text="Submit", command=self.submit_credentials)
 
-        self.email_label = ttk.Label(root, text="Email")
-        self.email_entry = ttk.Entry(root)
-
-        self.confirm_password_label = ttk.Label(root, text="Confirm Password")
-        self.confirm_password_entry = ttk.Entry(root, show='*')
-
         # Frames for entries and chats
         self.entry_frame = ttk.Frame(root)
         self.chat_frame = ttk.Frame(root)
@@ -55,30 +54,72 @@ class NumberApp:
         self.entry_row_counter = 0  # Keep track of the row position for entries
         self.chat_row_counter = 0  # Keep track of the row position for chats
 
-    def show_signin(self):
-        # Hide initial buttons
-        self.button_frame.grid_remove()
+    def submit_signup(self):
+        while True:
+            email = self.email_entry_signup.get()
+            username = self .username_entry_signup.get()
+            password = self.password_entry_signup.get()
+            confirm_pass = self.confirm_password_entry_signup.get()
 
-        # Show sign in fields
-        self.username_label.grid(row=1, column=0, padx=5, pady=5)
-        self.username_entry.grid(row=1, column=1, padx=5, pady=5)
+            if not self.super_user_created:
+                creation_is_done = client.create_super_admin(email=email,
+                                                             username=username,
+                                                             password=password,
+                                                             password_confirm=confirm_pass)
+                if creation_is_done:
+                    self.super_user_created = True
+                    break
+                else:
+                    messagebox.showerror("خطا", "پیام خطا: عملیات ناموفق بود.")
+                    return
+            elif self.super_user_created:
+                message = client.sign_up(email=email,
+                                         username=username,
+                                         password=password,
+                                         password_confirm=confirm_pass)
+                if message == "Done":
+                    break
+                else:
+                    messagebox.showerror("خطا", "پیام خطا: عملیات ناموفق بود.")
+                    return
+        self.signup_window.destroy()
 
-        self.email_label.grid(row=2, column=0, padx=5, pady=5)
-        self.email_entry.grid(row=2, column=1, padx=5, pady=5)
+    def show_signup(self):
+        self.signup_window = tk.Toplevel(self.root)
 
-        self.password_label.grid(row=3, column=0, padx=5, pady=5)
-        self.password_entry.grid(row=3, column=1, padx=5, pady=5)
+        self.username_label_signup = ttk.Label(self.signup_window, text="Username")
+        self.password_label_signup = ttk.Label(self.signup_window, text="Password")
+        self.username_entry_signup = ttk.Entry(self.signup_window)
+        self.password_entry_signup = ttk.Entry(self.signup_window, show='*')
+        self.submit_button_signup = ttk.Button(self.signup_window, text="Submit", command=self.submit_signup)
+        self.confirm_password_label_signup = ttk.Label(self.signup_window, text="Confirm Password")
+        self.confirm_password_entry_signup = ttk.Entry(self.signup_window, show='*')
+        self.email_label_signup = ttk.Label(self.signup_window, text="Email")
+        self.email_entry_signup = ttk.Entry(self.signup_window)
 
-        self.confirm_password_label.grid(row=4, column=0, padx=5, pady=5)
-        self.confirm_password_entry.grid(row=4, column=1, padx=5, pady=5)
+        # Forget initial buttons instead of removing the entire frame
+        self.button_frame.pack_forget()
 
-        self.submit_button.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
+        # Show sign up fields
+        self.username_label_signup.grid(row=1, column=0, padx=5, pady=5)
+        self.username_entry_signup.grid(row=1, column=1, padx=5, pady=5)
+
+        self.email_label_signup.grid(row=2, column=0, padx=5, pady=5)
+        self.email_entry_signup.grid(row=2, column=1, padx=5, pady=5)
+
+        self.password_label_signup.grid(row=3, column=0, padx=5, pady=5)
+        self.password_entry_signup.grid(row=3, column=1, padx=5, pady=5)
+
+        self.confirm_password_label_signup.grid(row=4, column=0, padx=5, pady=5)
+        self.confirm_password_entry_signup.grid(row=4, column=1, padx=5, pady=5)
+
+        self.submit_button_signup.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
 
     def show_login(self):
         # Hide initial buttons
         self.button_frame.grid_remove()
 
-        # Show log in fields (same as sign in fields)
+        # Show log in fields (same as sign up fields)
         self.username_label.grid(row=1, column=0, padx=5, pady=5)
         self.password_label.grid(row=2, column=0, padx=5, pady=5)
         self.username_entry.grid(row=1, column=1, padx=5, pady=5)
@@ -108,7 +149,7 @@ class NumberApp:
 
         print(f"Username: {username}, Password: {password}, Email: {email}, Confirm Password: {confirm_password}")
 
-        # Hide sign in fields
+        # Hide sign up fields
         self.username_label.grid_remove()
         self.password_label.grid_remove()
         self.username_entry.grid_remove()
@@ -128,7 +169,6 @@ class NumberApp:
 
         self.public_chat_button = ttk.Button(self.button_frame, text="Public Chat", command=self.open_public_chat)
         self.public_chat_button.grid(row=0, column=1, padx=5, pady=5)
-
 
         # Display frames
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')
@@ -251,7 +291,9 @@ class NumberApp:
         self.add_chat()
 
 
-if __name__ == "__main__":
+def start_GUI():
     root = tk.Tk()
     app = NumberApp(root)
     root.mainloop()
+
+# start_GUI()
