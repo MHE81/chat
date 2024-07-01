@@ -66,7 +66,7 @@ def sign_up(email, username, password, password_confirm):
     user_list = []
 
     print("Super Admin:\n")
-    if password == password_confirm:
+    if password != password_confirm:
         print("password does not matched ❌")
         return False
 
