@@ -4,14 +4,14 @@ import client
 from tkinter import messagebox
 
 
-
-class NumberApp:
+class GUIApp:
     def __init__(self, root):
+        client.server_side_of_client(self)
         self.signup_window = None
         self.super_user_created: bool = False
         self.target_username_entry = None
         self.root = root
-        self.root.title("Number Entry with Messages")
+        self.root.title("secure chat")
         self.private_chat_window = None
         self.message_text = None
         self.send_button = None
@@ -49,7 +49,6 @@ class NumberApp:
 
         self.entries = []
         self.text_fields = []
-        self.send_buttons = []
         self.read_only_texts = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
         self.chat_row_counter = 0  # Keep track of the row position for chats
@@ -57,7 +56,7 @@ class NumberApp:
     def submit_signup(self):
         while True:
             email = self.email_entry_signup.get()
-            username = self .username_entry_signup.get()
+            username = self.username_entry_signup.get()
             password = self.password_entry_signup.get()
             confirm_pass = self.confirm_password_entry_signup.get()
 
@@ -70,7 +69,7 @@ class NumberApp:
                     self.super_user_created = True
                     break
                 else:
-                    messagebox.showerror("خطا", "پیام خطا: عملیات ناموفق بود.")
+                    messagebox.showerror("password not match", "your password and its confirmation do not match")
                     return
             elif self.super_user_created:
                 message = client.sign_up(email=email,
@@ -80,12 +79,16 @@ class NumberApp:
                 if message == "Done":
                     break
                 else:
-                    messagebox.showerror("خطا", "پیام خطا: عملیات ناموفق بود.")
+                    messagebox.showerror("password not match", "your password and its confirmation do not match")
                     return
         self.signup_window.destroy()
 
     def show_signup(self):
         self.signup_window = tk.Toplevel(self.root)
+        self.signup_window.title("sign up")
+
+        if not self.super_user_created:
+            self.signup_window.title("create super user")
 
         self.username_label_signup = ttk.Label(self.signup_window, text="Username")
         self.password_label_signup = ttk.Label(self.signup_window, text="Password")
@@ -116,7 +119,11 @@ class NumberApp:
         self.submit_button_signup.grid(row=5, column=0, columnspan=2, padx=5, pady=5)
 
     def show_login(self):
-        # Hide initial buttons
+
+        if not self.super_user_created:
+            messagebox.showerror("no Super User", "built super user first using sign up button")
+            return
+            # Hide initial buttons
         self.button_frame.grid_remove()
 
         # Show log in fields (same as sign up fields)
@@ -142,22 +149,23 @@ class NumberApp:
         close_button.pack(pady=10)
 
     def submit_credentials(self):
+
         username = self.username_entry.get()
         password = self.password_entry.get()
-        email = self.email_entry.get()
-        confirm_password = self.confirm_password_entry.get()
 
-        print(f"Username: {username}, Password: {password}, Email: {email}, Confirm Password: {confirm_password}")
+        response = client.login(username=username, password=password)
+        if response != "Login successful":
+            messagebox.showerror("password incorrect", "your password is incorrect")
+            return
+
+        self.root.title(f"user: {username}")
+        print(f"Username: {username}, Password: {password}")
 
         # Hide sign up fields
         self.username_label.grid_remove()
         self.password_label.grid_remove()
         self.username_entry.grid_remove()
         self.password_entry.grid_remove()
-        self.email_label.grid_remove()
-        self.email_entry.grid_remove()
-        self.confirm_password_label.grid_remove()
-        self.confirm_password_entry.grid_remove()
         self.submit_button.grid_remove()
 
         # Show main buttons frame
@@ -174,7 +182,8 @@ class NumberApp:
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')
         self.chat_frame.grid(row=2, column=3, padx=5, pady=5, sticky='ne')
 
-    def add_entry(self, message="", target_username="", response_msg=""):
+    def add_entry(self, message="", target_username="", response_msg="") -> bool:
+
         # اضافه کردن label جدید
         label = ttk.Label(self.entry_frame, text=target_username)
         label.grid(row=self.entry_row_counter, column=0, padx=5, pady=5)
@@ -191,14 +200,16 @@ class NumberApp:
         text_field.grid_remove()
         self.text_fields.append(text_field)
 
-        send_button = ttk.Button(self.entry_frame, text="Send",
-                                 command=lambda i=len(self.entries) - 1: self.send_message(i))
-        send_button.grid(row=self.entry_row_counter, column=3, padx=5, pady=5)
-        send_button.grid_remove()
-        self.send_buttons.append(send_button)
+        # send_button = ttk.Button(self.entry_frame, text="Send",
+        #                          command=lambda i=len(self.entries) - 1: self.send_message(i))
+        # send_button.grid(row=self.entry_row_counter, column=3, padx=5, pady=5)
+        # send_button.grid_remove()
+        # self.send_buttons.append(send_button)
 
         self.root.after(0, self.show_and_fill_entry, len(self.entries) - 1, str(len(self.entries)))
         self.entry_row_counter += 1
+
+        return True
 
     def add_chat(self):
         chat_frame = ttk.Frame(self.chat_frame)
@@ -222,13 +233,11 @@ class NumberApp:
         # self.entries[index].insert(0, number)
         self.entries[index].config(state='readonly')  # Make the entry unchangeable
         self.text_fields[index].grid()
-        self.send_buttons[index].grid()
 
-    def send_message(self, index):
-        number = self.entries[index].get()
-        message = self.text_fields[index].get()
-        print(f"Message for number {number}: {message}")
-        self.text_fields[index].config(state='readonly')  # Make the text field unchangeable
+    # def send_message(self, index):
+    #     number = self.entries[index].get()
+    #     message = self.text_fields[index].get()
+    #     self.text_fields[index].config(state='readonly')  # Make the text field unchangeable
 
     def open_private_chat(self):
         self.private_chat_window = tk.Toplevel(self.root)
@@ -257,10 +266,15 @@ class NumberApp:
     def send_private_message(self):
         message = self.message_text.get("1.0", tk.END).strip()
         username = self.target_username_entry.get()
-        self.add_entry(message=message, target_username=username)
-        if message:
-            print(f"Private message sent: {message}")
-            self.private_chat_window.destroy()
+        response_msg = client.private_chat(username=self.username_entry.get(),
+                                           client_b_username=username,
+                                           message=message)
+
+        self.add_entry(message=message,
+                       target_username="to: " + username,
+                       response_msg=response_msg)
+
+        self.private_chat_window.destroy()
 
     def open_public_chat(self):
         self.public_chat_window = tk.Toplevel(self.root)
@@ -293,7 +307,7 @@ class NumberApp:
 
 def start_GUI():
     root = tk.Tk()
-    app = NumberApp(root)
+    app = GUIApp(root)
     root.mainloop()
 
 # start_GUI()

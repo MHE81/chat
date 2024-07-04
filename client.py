@@ -3,7 +3,7 @@ import hashlib
 import json
 import random
 import string
-
+import os
 import system
 from system import User, ChatSystem, key_fromJson, Key, Role
 import socket
@@ -14,13 +14,14 @@ from cryptography.hazmat.primitives import serialization, hashes
 from enum import Enum
 import GUI
 
+
 FORMAT = 'utf_8'
 
 MY_IP = 'localhost'
 SERVER_PORT = 5050
 ADDR = (MY_IP, SERVER_PORT)
 
-global client_port
+client_port: int
 global MyUser
 """this is the User class that contains data of my user after we logged in"""
 
@@ -101,7 +102,7 @@ def sign_up(email, username, password, password_confirm):
         return "Done"
 
 
-def private_chat(username):
+def private_chat(username, client_b_username, message):
     while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.connect(ADDR)
@@ -109,11 +110,10 @@ def private_chat(username):
             receive = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
                 server_socket.sendall(username.encode(FORMAT))
-                client_b_username = input("Chat with: ")
                 server_socket.sendall(client_b_username.encode(FORMAT))
-                message = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                print(message)
-                if message == "User is found":
+                responde = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                print(responde)
+                if responde == "User is found":
                     signature_pub_b_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
                     info = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
 
@@ -130,7 +130,7 @@ def private_chat(username):
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_b_socket:
                         client_b_socket.connect((MY_IP, client_B_listener_port))
                         client_b_socket.sendall("message from client A".encode(FORMAT))
-                        message = input("Enter your private message: ") + ":=," + client_b_username
+                        _ = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         client_b_socket.sendall(MyUser.username.encode(FORMAT))
                         # sign the message using client A's private key
                         signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
@@ -144,8 +144,6 @@ def private_chat(username):
                         client_b_socket.sendall(encrypted_message)
                         response = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         client_b_socket.sendall(signed_message)
-                        response = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
                         # receive response message
 
                         # receive encrypted response message and open it with client A's private key
@@ -165,20 +163,18 @@ def private_chat(username):
 
                         if authorized:
                             print(f" PV response msg from<{client_b_username}> : {response_message}")
+                            return response_message
                         else:
                             print("we don't know if the response-message is from target client ( didn't authorized )")
-                            return
+                            return "response not authorized"
 
-                        return
                 elif message == "User not found.":
                     continue
 
 
-def login():
+def login(username: str, password: str) -> str:
     global client_port
     global MyUser
-    username = input("Enter your username: ")
-    password = input("Enter your password: ")
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect(ADDR)
@@ -187,24 +183,25 @@ def login():
         if receive == "command received":
             s.sendall(username.encode(FORMAT))
             s.sendall(password.encode(FORMAT))
-            massage = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-            if massage == "Login successful":
+            message = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            if message == "Login successful":
                 # send listener port of client
                 s.sendall(str(client_port).encode(FORMAT))
                 my_user_jsonString = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 print(my_user_jsonString)
                 MyUser = User.User_fromJson(my_user_jsonString)
-                while True:
-                    choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
-                    if choice == 1:
-                        private_chat(username)
-                    if choice == 2:
-                        pass
-                    if choice == 3:
-                        return
-                    elif massage == "Incorrect password!":
-                        print("Try again")
-                        return
+    return message
+    # while True:
+    #     choice = int(input("1.Private chat\t2.Group chat\t3.Exit\n"))
+    #     if choice == 1:
+    #         private_chat(username)
+    #     if choice == 2:
+    #         pass
+    #     if choice == 3:
+    #         return
+    #     elif message == "Incorrect password!":
+    #         print("Try again")
+    #         return
 
 
 def show_users():
@@ -227,9 +224,10 @@ def show_users():
 #         # print(f"Email: {user.email}, Username: {user.username}")
 
 
-def p2p_client(conn, addr):
+def p2p_client(conn, addr, gui_app):
     """
     in here we will describe to how to communicate with other client as server client
+    :param gui_app:
     :param conn:
     :param addr:
     :return:
@@ -237,13 +235,15 @@ def p2p_client(conn, addr):
 
     # step 1: get encrypted signed message
     while True:
-        command = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        command = conn.recv(RECEIVE_BUFFER_SIZE)
 
         if not command:
             break
 
+        command = command.decode(FORMAT)
         if command == "message from client A":
-            client_A_username: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            conn.sendall("message received".encode(FORMAT))
+            client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
             # step 2 ask form server for client A's public key
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -275,20 +275,20 @@ def p2p_client(conn, addr):
 
             # step 3 verify with client A's public key
             signed_message = conn.recv(RECEIVE_BUFFER_SIZE)
-            conn.sendall("message received".encode(FORMAT))
             authorized = ChatSystem.verify_signature(public_key=client_A_public_key,
                                                      mess_in_byte=message.encode(FORMAT), signature=signed_message)
 
             message = message.split(":=,")[0]
 
+            # step 4 write a response message
             if authorized:
                 print(f" PV msg from<{client_A_username}> : {message}")
             else:
                 print("we don't know if the message is from source client ( didn't authorized )")
                 return
 
-            # step 4 write a response message
-            response_message = input("enter your response message: ") + ":=," + MyUser.username
+            response_message = "message_received"
+            gui_app.add_entry(message=message, target_username="from: " + client_A_username, response_msg=response_message)
 
             # step 5 encrypt r-msg with client A's public key
             encrypted_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
@@ -305,19 +305,26 @@ def p2p_client(conn, addr):
             break
 
 
-def server_side_of_client():
+def accept_connection(s, gui_app):
+    print("thread runs")
+    while True:
+        conn, addr = s.accept()
+        threading.Thread(target=p2p_client, args=(conn, addr, gui_app)).start()
+
+
+def server_side_of_client(gui_app):
     global client_port
 
     while True:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                client_port = random.randint(0, 65536)
-                s.bind(('localhost', client_port))
-                print(f"[Client listening on port {client_port}]")
-                s.listen()
-                while True:
-                    conn, addr = s.accept()
-                    threading.Thread(target=p2p_client, args=(conn, addr)).start()
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_port = random.randint(1024, 65535)
+            s.bind(('localhost', client_port))
+            print(f"[Client listening on port {client_port}]")
+            s.listen()
+            t1 = threading.Thread(target=accept_connection, args=(s, gui_app))
+            t1.start()
+            return
         except socket.error as e:
             if e.errno == socket.errno.EADDRINUSE:
                 print(f"Port {client_port} is already in use.")
@@ -328,27 +335,8 @@ def server_side_of_client():
                 print(f"Failed to bind socket: {e}")
 
 
-# def client_and_server_actions():
-#     while True:
-#         action = int(input("1.Sign up\t2.Login\t 3.Show Users\t4.Exit\n"))
-#         if action == 1:
-#             sign_up()
-#         elif action == 2:
-#             login()
-#         elif action == 3:
-#             show_users()
-#         elif action == 4:
-#             break
-#         else:
-#             print("Invalid action.")
-
-
-# Example usage:
+# مثال برای استفاده
 if __name__ == "__main__":
-    # super_admin = create_super_admin()
     root = GUI.tk.Tk()
-    app = GUI.NumberApp(root)
+    app = GUI.GUIApp(root)
     root.mainloop()
-
-    threading.Thread(target=server_side_of_client).start()
-    client_and_server_actions()
