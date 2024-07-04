@@ -6,6 +6,11 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.target_username_perm = None
+        self.selected_permission = None
+        self.permission_listbox = None
+        self.permission_window = None
+        self.add_permission_button = None
         client.server_side_of_client(self)
         self.signup_window = None
         self.super_user_created: bool = False
@@ -148,6 +153,38 @@ class GUIApp:
         close_button = ttk.Button(self.user_window, text="Close", command=self.user_window.destroy)
         close_button.pack(pady=10)
 
+    def choose_role(self):
+        selected_index = self.permission_listbox.curselection()
+        if selected_index:
+            selected_item = self.permission_listbox.get(selected_index)
+            target_username = self.target_username_perm.get()
+            respond = client.add_permissions(username=target_username, role_value=selected_item)
+            messagebox.showinfo(title="Success", message=f"{target_username} has {selected_item} role now !")
+
+
+    def add_permission(self):
+        self.permission_window = tk.Toplevel(self.root)
+        self.permission_window.title("Add Permissions")
+        self.permission_window.geometry("400x300+100+100")
+
+        # اضافه کردن برچسب به ورودی Entry
+        label_username = ttk.Label(self.permission_window, text="Target Username:")
+        label_username.grid(row=0, column=0, padx=5, pady=5)
+
+        self.target_username_perm = ttk.Entry(self.permission_window)
+        self.target_username_perm.grid(row=0, column=1, padx=5, pady=5)
+
+        # تنظیم Listbox برای نمایش لیست دسترسی‌ها
+        self.permission_listbox = tk.Listbox(self.permission_window, selectmode=tk.SINGLE)
+        self.permission_listbox.grid(row=1, column=0, pady=20, padx=20, columnspan=2)  # columnspan برای ادغام در دو ستون
+
+        for role in client.Role:
+            self.permission_listbox.insert(tk.END, role.value)
+
+        # تنظیم دکمه برای نمایش آیتم انتخاب شده
+        self.selected_permission = tk.Button(self.permission_window, text="Show Selected Items", command=self.choose_role)
+        self.selected_permission.grid(row=2, column=0, columnspan=2, pady=10)
+
     def submit_credentials(self):
 
         username = self.username_entry.get()
@@ -177,6 +214,9 @@ class GUIApp:
 
         self.public_chat_button = ttk.Button(self.button_frame, text="Public Chat", command=self.open_public_chat)
         self.public_chat_button.grid(row=0, column=1, padx=5, pady=5)
+
+        self.add_permission_button = ttk.Button(self.button_frame, text="Add permission", command=self.add_permission)
+        self.add_permission_button.grid(row=0, column=3, padx=5, pady=5)
 
         # Display frames
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')

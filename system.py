@@ -62,10 +62,17 @@ class User:
         self.password = password
         self.salt = salt
         self.hashed = hashed
-        self.role = role
+        self.role_value = role
         self.public_key = public_key
         self.private_key = private_key
         self.permissions = self.assign_permissions(role)
+        """
+        list_ability :
+        0 : can send private messages
+        1 : can add and remove users from group chat
+        2 : can add advanced users
+        3 : can add admins
+        """
         self.private_key_pem = " "
         self.public_key_pem = " "
         if private_key != ' ':
@@ -91,6 +98,20 @@ class User:
         role_choices = [ 'super admin' , 'admin' , 'advanced user' , 'beginner user']
         return a permission list between above users
 
+        list_ability :
+        0 : can send private messages
+        1 : can add and remove users from group chat
+        2 : can add advanced users
+        3 : can add admins
+
+        role ability :
+        {
+        'super admin' : can add admins , can add advanced users, can add and remove users from group chat, can send private messages
+        'admin' : can can add advanced users, can add and remove users from group chat, can send private messages
+        'advanced user' : can add and remove users from group chat,can send private messages
+        'beginner user' : can send private messages
+        }
+
         :param role:
         :return list:
         """
@@ -104,7 +125,7 @@ class User:
 
     def __repr__(self):
         return (f"User(email={self.email}, username={self.username}, "
-                f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role}")
+                f"password={self.password}, salt={self.salt}, hashed={self.hashed}, role={self.role_value}")
 
     def toJson(self):
         userModel = {
@@ -113,7 +134,7 @@ class User:
             "Password": self.password,
             "Salt": self.salt,
             "Hash Value": self.hashed,
-            "Role": self.role,
+            "Role": self.role_value,
             "Public_key_pem": self.public_key_pem if isinstance(self.public_key_pem,
                                                                 str) else self.public_key_pem.decode(FORMAT),
             "Private_key_pem": self.private_key_pem if isinstance(self.private_key_pem,
@@ -168,7 +189,7 @@ class User:
         # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
 
 
-def find_user_by_username(users, username):
+def find_user_by_username(users: list[User], username: str) -> User or None:
     """
     search in users by username
     :param users:
@@ -469,6 +490,18 @@ class ChatSystem:
             if response == "signed public key received":
                 conn.sendall(public_key_pem)
 
+    def add_permissions(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        data: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        username, role_value = data.split(":,")
+        conn.sendall("permission applied".encode(FORMAT))
+
+        target_user: User = find_user_by_username(users=self.users, username=username)
+        target_user.role_value = role_value
+        target_user.permissions = User.assign_permissions(role=role_value)
+
+        print(target_user.permissions)
+
     def handle_client(self, conn, addr):
         print(f"Connected by {addr}")
         while True:
@@ -501,6 +534,9 @@ class ChatSystem:
 
             if command == "ask for public key":
                 self.send_public_key(conn)
+
+            if command == "add permission to user":
+                self.add_permissions(conn)
 
     def start_server(self):
         self.public_keys_list.append(Public_keys(self.server_public_pem))

@@ -14,7 +14,6 @@ from cryptography.hazmat.primitives import serialization, hashes
 from enum import Enum
 import GUI
 
-
 FORMAT = 'utf_8'
 
 MY_IP = 'localhost'
@@ -288,7 +287,8 @@ def p2p_client(conn, addr, gui_app):
                 return
 
             response_message = "message_received"
-            gui_app.add_entry(message=message, target_username="from: " + client_A_username, response_msg=response_message)
+            gui_app.add_entry(message=message, target_username="from: " + client_A_username,
+                              response_msg=response_message)
 
             # step 5 encrypt r-msg with client A's public key
             encrypted_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
@@ -303,6 +303,34 @@ def p2p_client(conn, addr, gui_app):
             respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
             break
+
+
+def add_permissions(username: str, role_value: str):
+    my_permissions = MyUser.permissions
+
+    # if we don't have permission to add advanced user and we do it
+    if (role_value == Role.ADVANCED_USER.value) and (not my_permissions[2]):
+        return "you can't add advanced users"
+
+    # if we don't have permission to add admin and we do it
+    if (role_value == Role.ADMIN) and (not my_permissions[3]):
+        return "you can't add admin users"
+
+    if my_permissions == Role.BEGINNER_USER.value:
+        return "you can't add any role"
+
+    if role_value == Role.SUPER_ADMIN.value:
+        return "no one can add super user"
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect(ADDR)
+        server_socket.sendall("add permission to user".encode(FORMAT))
+        received_message = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        if received_message == "command received":
+            server_socket.sendall((username + ":," + role_value).encode(FORMAT))
+            respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            return respond
 
 
 def accept_connection(s, gui_app):
