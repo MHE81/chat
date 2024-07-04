@@ -6,6 +6,7 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.pub_label = None
         self.target_username_perm = None
         self.selected_permission = None
         self.permission_listbox = None
@@ -56,6 +57,7 @@ class GUIApp:
         self.text_fields = []
         self.read_only_texts = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
+        self.entry_row_counter_pub_chat = 0  # Keep track of the row position for entries in public chat
         self.chat_row_counter = 0  # Keep track of the row position for chats
 
     def submit_signup(self):
@@ -162,7 +164,7 @@ class GUIApp:
             if respond == "permission applied":
                 messagebox.showinfo(title=respond, message=f"{target_username} has {selected_item} role now !")
             else:
-                messagebox.showerror(title="error",message=respond)
+                messagebox.showerror(title="error", message=respond)
 
     def add_permission(self):
         self.permission_window = tk.Toplevel(self.root)
@@ -333,14 +335,18 @@ class GUIApp:
         self.cancel_button = ttk.Button(self.public_chat_window, text="Cancel", command=self.public_chat_window.destroy)
         self.cancel_button.grid(row=0, column=2, padx=5, pady=5)
 
+        self.entry_row_counter_pub_chat += 1
+        self.pub_label = ttk.Label(self.public_chat_window, text="users to add")
+        self.pub_label.grid(row=1, column=0, padx=5, pady=5)
+
         self.public_entry_frame = ttk.Frame(self.public_chat_window)
         self.public_entry_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
 
     def add_public_entry(self):
         entry = ttk.Entry(self.public_entry_frame)
-        entry.grid(row=self.entry_row_counter, column=0, padx=5, pady=5)
+        entry.grid(row=self.entry_row_counter_pub_chat, column=0, padx=5, pady=5)
         self.entries.append(entry)
-        self.entry_row_counter += 1
+        self.entry_row_counter_pub_chat += 1
 
     def create_public_chat(self):
         entries_data = [entry.get() for entry in self.entries]
