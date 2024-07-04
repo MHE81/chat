@@ -494,9 +494,15 @@ class ChatSystem:
         conn.sendall("command received".encode(FORMAT))
         data: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         username, role_value = data.split(":,")
-        conn.sendall("permission applied".encode(FORMAT))
 
         target_user: User = find_user_by_username(users=self.users, username=username)
+
+        respond = "permission applied"
+        if target_user.role_value == Role.SUPER_ADMIN.value:
+            respond = "no one can remove super admin role"
+
+        conn.sendall(respond.encode(FORMAT))
+
         target_user.role_value = role_value
         target_user.permissions = User.assign_permissions(role=role_value)
 

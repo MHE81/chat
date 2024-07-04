@@ -159,8 +159,10 @@ class GUIApp:
             selected_item = self.permission_listbox.get(selected_index)
             target_username = self.target_username_perm.get()
             respond = client.add_permissions(username=target_username, role_value=selected_item)
-            messagebox.showinfo(title="Success", message=f"{target_username} has {selected_item} role now !")
-
+            if respond == "permission applied":
+                messagebox.showinfo(title=respond, message=f"{target_username} has {selected_item} role now !")
+            else:
+                messagebox.showerror(title="error",message=respond)
 
     def add_permission(self):
         self.permission_window = tk.Toplevel(self.root)
@@ -176,13 +178,15 @@ class GUIApp:
 
         # تنظیم Listbox برای نمایش لیست دسترسی‌ها
         self.permission_listbox = tk.Listbox(self.permission_window, selectmode=tk.SINGLE)
-        self.permission_listbox.grid(row=1, column=0, pady=20, padx=20, columnspan=2)  # columnspan برای ادغام در دو ستون
+        self.permission_listbox.grid(row=1, column=0, pady=20, padx=20,
+                                     columnspan=2)  # columnspan برای ادغام در دو ستون
 
         for role in client.Role:
             self.permission_listbox.insert(tk.END, role.value)
 
         # تنظیم دکمه برای نمایش آیتم انتخاب شده
-        self.selected_permission = tk.Button(self.permission_window, text="Show Selected Items", command=self.choose_role)
+        self.selected_permission = tk.Button(self.permission_window, text="Show Selected Items",
+                                             command=self.choose_role)
         self.selected_permission.grid(row=2, column=0, columnspan=2, pady=10)
 
     def submit_credentials(self):

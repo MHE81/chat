@@ -308,19 +308,19 @@ def p2p_client(conn, addr, gui_app):
 def add_permissions(username: str, role_value: str):
     my_permissions = MyUser.permissions
 
+    if role_value == Role.SUPER_ADMIN.value:
+        return "no one can add super user"
+
+    if MyUser.role_value == Role.BEGINNER_USER.value:
+        return "you can't add any role"
+
     # if we don't have permission to add advanced user and we do it
     if (role_value == Role.ADVANCED_USER.value) and (not my_permissions[2]):
         return "you can't add advanced users"
 
     # if we don't have permission to add admin and we do it
-    if (role_value == Role.ADMIN) and (not my_permissions[3]):
+    if (role_value == Role.ADMIN.value) and (not my_permissions[3]):
         return "you can't add admin users"
-
-    if my_permissions == Role.BEGINNER_USER.value:
-        return "you can't add any role"
-
-    if role_value == Role.SUPER_ADMIN.value:
-        return "no one can add super user"
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.connect(ADDR)
