@@ -57,7 +57,7 @@ class GUIApp:
         self.text_fields = []
         self.read_only_texts = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
-        self.entry_row_counter_pub_chat = 0  # Keep track of the row position for entries in public chat
+        self.entry_row_counter_chat_members = None  # Keep track of the row position for entries in public chat
         self.chat_row_counter = 0  # Keep track of the row position for chats
 
     def submit_signup(self):
@@ -323,6 +323,8 @@ class GUIApp:
         self.private_chat_window.destroy()
 
     def open_public_chat(self):
+        self.entry_row_counter_chat_members = 0
+
         self.public_chat_window = tk.Toplevel(self.root)
         self.public_chat_window.title("Public Chat")
 
@@ -335,22 +337,28 @@ class GUIApp:
         self.cancel_button = ttk.Button(self.public_chat_window, text="Cancel", command=self.public_chat_window.destroy)
         self.cancel_button.grid(row=0, column=2, padx=5, pady=5)
 
-        self.entry_row_counter_pub_chat += 1
         self.pub_label = ttk.Label(self.public_chat_window, text="users to add")
-        self.pub_label.grid(row=1, column=0, padx=5, pady=5)
+        self.pub_label.grid(row=1, column=1, padx=5, pady=5)
 
         self.public_entry_frame = ttk.Frame(self.public_chat_window)
-        self.public_entry_frame.grid(row=1, column=0, columnspan=3, padx=5, pady=5)
+        self.public_entry_frame.grid(row=2, column=0, columnspan=3, padx=5, pady=5)
 
     def add_public_entry(self):
         entry = ttk.Entry(self.public_entry_frame)
-        entry.grid(row=self.entry_row_counter_pub_chat, column=0, padx=5, pady=5)
+        entry.grid(row=self.entry_row_counter_chat_members, column=0, padx=5, pady=5)
         self.entries.append(entry)
-        self.entry_row_counter_pub_chat += 1
+        self.entry_row_counter_chat_members += 1
 
     def create_public_chat(self):
-        entries_data = [entry.get() for entry in self.entries]
+        # ابتدا مقادیر ویجت‌های ورودی را بگیرید
+        entries_data = []
+        for entry in self.entries:
+            entry_data = entry.get()
+            entries_data.append(entry_data)
         print(f"Public chat entries: {entries_data}")
+        self.entries = []
+
+        # سپس پنجره را ببندید
         self.public_chat_window.destroy()
         self.add_chat()
 
