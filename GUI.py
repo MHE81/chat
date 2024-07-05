@@ -54,6 +54,7 @@ class GUIApp:
         self.chat_frame = ttk.Frame(root)
 
         self.entries = []
+        self.entries_pub_chat = []
         self.text_fields = []
         self.read_only_texts = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
@@ -346,17 +347,17 @@ class GUIApp:
     def add_public_entry(self):
         entry = ttk.Entry(self.public_entry_frame)
         entry.grid(row=self.entry_row_counter_chat_members, column=0, padx=5, pady=5)
-        self.entries.append(entry)
+        self.entries_pub_chat.append(entry)
         self.entry_row_counter_chat_members += 1
 
     def create_public_chat(self):
         # ابتدا مقادیر ویجت‌های ورودی را بگیرید
         entries_data = []
-        for entry in self.entries:
+        for entry in self.entries_pub_chat:
             entry_data = entry.get()
             entries_data.append(entry_data)
         print(f"Public chat entries: {entries_data}")
-        self.entries = []
+        self.entries_pub_chat = []
 
         # سپس پنجره را ببندید
         self.public_chat_window.destroy()
