@@ -24,8 +24,6 @@ ADDR = (SERVER_IP, SERVER_PORT)
 
 RECEIVE_BUFFER_SIZE = 4096 * 2
 
-Group_IDs = []
-
 
 class Role(Enum):
     SUPER_ADMIN = "super admin"
@@ -34,26 +32,26 @@ class Role(Enum):
     BEGINNER_USER = "beginner user"
 
 
-# def encrypt(message: str, public_key):
-#     # Step 1: Convert message to bytes
-#     message_bytes = message.encode(FORMAT)
-#
-#     # Step 2: Encrypt the message
-#     encrypted_bytes = [pow(b, public_key[0], public_key[1]) for b in message_bytes]
-#
-#     return encrypted_bytes
-#
-#
-# def decrypt(encrypted_bytes, private_key):
-#     print(type(encrypted_bytes), type(private_key))
-#     # Step 1: Decrypt the message
-#     print(private_key)
-#     decrypted_bytes = [pow(b, private_key[0], private_key[1]) for b in encrypted_bytes]
-#
-#     # Step 2: Convert bytes to string
-#     decrypted_message = "".join(chr(b) for b in decrypted_bytes)
-#
-#     return decrypted_message
+class Group:
+    def __init__(self, group_ID: str, group_port: int):
+        self.__message_history: list[list[str, str]] = []
+        """
+        in inner list we have:\n
+        0 index : username of message\n
+        1st index: context of message
+        """
+        self.group_ID: str = group_ID
+        self.group_port: int = group_port
+
+    def set_message(self, username_of_sender: str, message: str):
+        new_message = [username_of_sender, message]
+        self.__message_history.append(new_message)
+
+    def get_message_history(self) -> list[list[str, str]]:
+        return self.__message_history
+
+
+Groups: list[Group] = []
 
 
 class User:
@@ -94,6 +92,7 @@ class User:
         a port that the client listens on it so that if another client 
         asks for a p2p connection we can answer it 
         """
+
 
     @staticmethod
     def assign_permissions(role: str) -> list[bool]:
@@ -505,10 +504,32 @@ class ChatSystem:
             except OSError:
                 return False  # Port is in use
 
+    def add_message_to_pub_chat(self, conn, addr):
+        conn.sendall("command received".encode(FORMAT))
+        message_data = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+
+
+    def handle_messages(self, conn):
+
+        while True:
+            command = conn.recv(RECEIVE_BUFFER_SIZE)
+
+            if not command:
+                break
+
+            command = command.decode(FORMAT)
+
+            if command == "add message":
+                self.add_message_to_pub_chat(conn)
+
+            if command == "load messages":
+                pass
+
     def public_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
         data: str = conn.recv(RECEIVE_BUFFER_SIZE)
-        users_list = data.split(",")
+        users_list: list[str] = data.split(",")
         group_owner = users_list[-1]
         conn.sendall("command received".encode(FORMAT))
 
@@ -528,10 +549,12 @@ class ChatSystem:
         for username in users_list:
             group_users.append(find_user_by_username(self.users, username))
 
+        Group_IDs = [group.group_ID for group in Groups]
         while True:
             group_id = uuid.uuid4()
             if group_id not in Group_IDs:
-                Group_IDs.append(group_id)
+                # make group object
+                Groups.append(Group(group_ID=group_id, group_port=group_port))
                 break
 
         # send certificate combining group ID with the asked port
@@ -541,6 +564,17 @@ class ChatSystem:
         conn.sendall(certificate)
         _ = conn.recv(RECEIVE_BUFFER_SIZE)
         conn.sendall((username + "\n" + certificate_message).encode(FORMAT))
+
+        # start listening on group_port on server side so
+        # if there was a message for public chat we can store it
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('localhost', group_port))
+            print(f"[Client listening on port {client_port}]")
+            s.listen()
+            while True:
+                conn, addr = s.accept()
+                threading.Thread(target=self.handle_messages, args=(conn, addr)).start()
+
 
     def handle_client(self, conn, addr):
         print(f"Connected by {addr}")

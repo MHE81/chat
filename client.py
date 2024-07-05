@@ -304,23 +304,24 @@ def server_side_private_chat(conn, gui_app, is_cert=False):
 
 
 def listen_on_public_chat_port(port: int):
-    while True:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('localhost', port))
-                print(f"[Client listening on port {port} for public chat")
-                s.listen()
-                while True:
-                    conn, addr = s.accept()
-                    threading.Thread(target=x, args=x).start()
-        except socket.error as e:
-            if e.errno == socket.errno.EADDRINUSE:
-                print(f"Port {port} is already in use.")
-            elif e.errno == socket.errno.EACCES:
-                print(f"Permission denied to bind to port {port}.")
-                return
-            else:
-                print(f"Failed to bind socket: {e}")
+    pass
+    # while True:
+    #     try:
+    #         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    #             s.bind(('localhost', port))
+    #             print(f"[Client listening on port {port} for public chat")
+    #             s.listen()
+    #             while True:
+    #                 conn, addr = s.accept()
+    #                 threading.Thread(target=x, args=x).start()
+    #     except socket.error as e:
+    #         if e.errno == socket.errno.EADDRINUSE:
+    #             print(f"Port {port} is already in use.")
+    #         elif e.errno == socket.errno.EACCES:
+    #             print(f"Permission denied to bind to port {port}.")
+    #             return
+    #         else:
+    #             print(f"Failed to bind socket: {e}")
 
 
 def handle_server_side(conn, addr, gui_app):
@@ -418,6 +419,10 @@ def public_chat_method(user_to_add: list[str]):
         # start listening to port we said
 
 
+def add_messages_to_public_chat(sender_username: str, message: str):
+    pass
+
+
 def accept_connection(s, gui_app):
     print("thread runs")
     while True:
@@ -435,8 +440,7 @@ def server_side_of_client(gui_app):
                 s.bind(('localhost', client_port))
                 print(f"[Client listening on port {client_port}]")
                 s.listen()
-                t1 = threading.Thread(target=accept_connection, args=(s, gui_app))
-                t1.start()
+                threading.Thread(target=accept_connection, args=(s, gui_app)).start()
                 return
         except socket.error as e:
             if e.errno == socket.errno.EADDRINUSE:

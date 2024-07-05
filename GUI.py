@@ -263,7 +263,7 @@ class GUIApp:
         chat_frame.grid(row=self.chat_row_counter, column=0, padx=5, pady=5, sticky='w')
 
         read_only_text = tk.Text(chat_frame, height=4, width=30)
-        read_only_text.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        read_only_text.grid(row=0, column=0, padx=0, pady=0, sticky='w')
         group_starter_text = f"<{owner_username}> started a public chat:"
         read_only_text.insert(tk.END, group_starter_text)
         read_only_text.config(state='disabled')  # Make the text field read-only
@@ -275,6 +275,15 @@ class GUIApp:
 
         self.read_only_texts.append(read_only_text)
         self.chat_row_counter += 1
+
+        add_message_label = ttk.Label(chat_frame, text="write your message:")
+        add_message_label.grid(row=1, column=0, padx=5, pady=5)
+
+        self.target_username_entry = ttk.Entry(chat_frame)
+        self.target_username_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        self.send_button = ttk.Button(chat_frame, text="Send", command=self.send_private_message)
+        self.send_button.grid(row=1, column=2, padx=5, pady=5)
 
     def show_and_fill_entry(self, index, number):
         self.entries[index].grid()  # Show the entry
