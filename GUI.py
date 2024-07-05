@@ -6,6 +6,7 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.message_public_chat = []
         self.pub_label = None
         self.target_username_perm = None
         self.selected_permission = None
@@ -258,6 +259,11 @@ class GUIApp:
 
         return True
 
+    def send_public_message(self, counter: int):
+        public_message = self.message_public_chat[counter]
+        my_username = client.MyUser.username
+        this_public_chat_port
+
     def add_chat(self):
         chat_frame = ttk.Frame(self.chat_frame)
         chat_frame.grid(row=self.chat_row_counter, column=0, padx=5, pady=5, sticky='w')
@@ -273,6 +279,16 @@ class GUIApp:
         read_only_text.config(yscrollcommand=scrollbar.set)
 
         self.read_only_texts.append(read_only_text)
+
+        add_message_label = ttk.Label(chat_frame, text="write your message:")
+        add_message_label.grid(row=1, column=0, padx=5, pady=5)
+
+        self.message_public_chat.append(ttk.Entry(chat_frame))
+        self.message_public_chat[self.chat_row_counter].grid(row=1, column=1, padx=5, pady=5)
+
+        self.send_button = ttk.Button(chat_frame, text="Send", command=lambda chat_counter=self.chat_row_counter: self.send_public_message(chat_counter))
+        self.send_button.grid(row=1, column=2, padx=5, pady=5)
+
         self.chat_row_counter += 1
 
     def show_and_fill_entry(self, index, number):
@@ -310,7 +326,7 @@ class GUIApp:
                                         command=self.private_chat_window.destroy)
         self.cancel_button.grid(row=3, column=1, padx=5, pady=5)
 
-    def send_private_message(self):
+    def send_private_message(self, chat_counter):
         message = self.message_text.get("1.0", tk.END).strip()
         username = self.target_username_entry.get()
         response_msg = client.private_chat(username=self.username_entry.get(),
@@ -351,15 +367,14 @@ class GUIApp:
         self.entry_row_counter_chat_members += 1
 
     def create_public_chat(self):
-        # ابتدا مقادیر ویجت‌های ورودی را بگیرید
-        entries_data = []
-        for entry in self.entries_pub_chat:
-            entry_data = entry.get()
-            entries_data.append(entry_data)
+
+        entries_data = [entry.get() for entry in self.entries_pub_chat]
         print(f"Public chat entries: {entries_data}")
         self.entries_pub_chat = []
 
-        # سپس پنجره را ببندید
+        # run a method to create the group
+
+        # close the toplevel window and add a chat textfield on root page
         self.public_chat_window.destroy()
         self.add_chat()
 
