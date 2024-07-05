@@ -258,13 +258,14 @@ class GUIApp:
 
         return True
 
-    def add_chat(self):
+    def add_chat(self, owner_username: str):
         chat_frame = ttk.Frame(self.chat_frame)
         chat_frame.grid(row=self.chat_row_counter, column=0, padx=5, pady=5, sticky='w')
 
         read_only_text = tk.Text(chat_frame, height=4, width=30)
         read_only_text.grid(row=0, column=0, padx=5, pady=5, sticky='w')
-        read_only_text.insert(tk.END, "Read-Only Text")
+        group_starter_text = f"<{owner_username}> started a public chat:"
+        read_only_text.insert(tk.END, group_starter_text)
         read_only_text.config(state='disabled')  # Make the text field read-only
 
         # Add scrollbar to text field
@@ -353,7 +354,7 @@ class GUIApp:
         entries_data = [entry.get() for entry in self.entries_pub_chat]
         # todo : add entries to group chat
         self.public_chat_window.destroy()
-        self.add_chat()
+        self.add_chat(owner_username=client.MyUser.username)
 
 
 def start_GUI():

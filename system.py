@@ -26,6 +26,7 @@ RECEIVE_BUFFER_SIZE = 4096 * 2
 
 Group_IDs = []
 
+
 class Role(Enum):
     SUPER_ADMIN = "super admin"
     ADMIN = "admin"
@@ -431,6 +432,7 @@ class ChatSystem:
     def private_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
         src_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        conn.sendall("command received".encode(FORMAT))
         dest_username: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         dest_user: User = find_user_by_username(self.users, dest_username)
 
@@ -513,7 +515,7 @@ class ChatSystem:
         # check if the port we said is empty or not
 
         while True:
-            group_port = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            group_port = int(conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
             is_port_free: bool = self.is_port_free(group_port)
             if is_port_free:
                 conn.sendall("chat started".encode(FORMAT))
@@ -532,8 +534,13 @@ class ChatSystem:
                 Group_IDs.append(group_id)
                 break
 
-        # send group ID with the asked port
-
+        # send certificate combining group ID with the asked port
+        certificate_message = group_id + "," + group_port
+        certificate = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
+                                                       mess_in_byte=certificate_message)
+        conn.sendall(certificate)
+        _ = conn.recv(RECEIVE_BUFFER_SIZE)
+        conn.sendall((username + "\n" + certificate_message).encode(FORMAT))
 
     def handle_client(self, conn, addr):
         print(f"Connected by {addr}")
