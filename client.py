@@ -101,18 +101,23 @@ def sign_up(email, username, password, password_confirm):
         return "Done"
 
 
-def private_chat(username, client_b_username, message):
+def private_chat(username, client_b_username, message, is_cert=False):
+
     while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+
             server_socket.connect(ADDR)
             server_socket.sendall("private chat".encode(FORMAT))
             receive = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if receive == "command received":
+
                 server_socket.sendall(username.encode(FORMAT))
+                _ = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 server_socket.sendall(client_b_username.encode(FORMAT))
-                responde = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                print(responde)
-                if responde == "User is found":
+                response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+                print(response)
+                if response == "User is found":
                     signature_pub_b_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
                     info = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT).split(":")
 
@@ -128,37 +133,46 @@ def private_chat(username, client_b_username, message):
                     public_key_user_B = serialization.load_pem_public_key(public_key_pem_user_B.encode(FORMAT))
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_b_socket:
                         client_b_socket.connect((MY_IP, client_B_listener_port))
-                        client_b_socket.sendall("message from client A".encode(FORMAT))
+
+
+                        if is_cert:
+                            client_b_socket.sendall("invitation certificate".encode(FORMAT))
+                        else:
+                            client_b_socket.sendall("message from client A".encode(FORMAT))
+
                         _ = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         client_b_socket.sendall(MyUser.username.encode(FORMAT))
                         # sign the message using client A's private key
+
                         signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
                                                                           mess_in_byte=message.encode(FORMAT))
 
-                        # encrypt the sign message with client B's public key
+                        # encrypt message with client B's public key
                         encrypted_message = ChatSystem.encrypt_with_public_key(public_key=public_key_user_B,
                                                                                mess_in_byte=message.encode(FORMAT))
 
                         # send the data to client B
                         client_b_socket.sendall(encrypted_message)
-                        response = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                        _ = client_b_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                         client_b_socket.sendall(signed_message)
                         # receive response message
 
+
                         # receive encrypted response message and open it with client A's private key
                         encrypted_message = client_b_socket.recv(RECEIVE_BUFFER_SIZE)
-                        client_b_socket.sendall("message received".encode(FORMAT))
+                        client_b_socket.sendall("command received".encode(FORMAT))
                         response_message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
                                                                                encrypted_message=encrypted_message)
 
+
+
                         # receive signed response message and authorize it with client B's public key
                         signed_message = client_b_socket.recv(RECEIVE_BUFFER_SIZE)
-                        client_b_socket.sendall("message received".encode())
+                        client_b_socket.sendall("command received".encode())
 
                         authorized = ChatSystem.verify_signature(public_key=public_key_user_B,
                                                                  mess_in_byte=response_message.encode(FORMAT),
                                                                  signature=signed_message)
-                        response_message = response_message.split(":=,")[0]
 
                         if authorized:
                             print(f" PV response msg from<{client_b_username}> : {response_message}")
@@ -222,6 +236,123 @@ def show_users():
 #         print(user)
 #         # print(f"Email: {user.email}, Username: {user.username}")
 
+def server_side_private_chat(conn, gui_app, is_cert=False):
+    conn.sendall("command received".encode(FORMAT))
+    client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+    # step 2 ask form server for client A's public key
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect(ADDR)
+        server_socket.sendall("ask for public key".encode(FORMAT))
+        respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        if respond != "command received":
+            print("Invalid response")
+            return
+
+        server_socket.sendall(client_A_username.encode(FORMAT))
+        signed_public_key = server_socket.recv(RECEIVE_BUFFER_SIZE)
+        server_socket.sendall("signed public key received".encode(FORMAT))
+        client_A_public_key_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
+
+        authorized: bool = ChatSystem.verify_signature(public_key=server_public_key,
+                                                       mess_in_byte=client_A_public_key_pem,
+                                                       signature=signed_public_key)
+
+        if authorized:
+            client_A_public_key = serialization.load_pem_public_key(client_A_public_key_pem)
+
+    # step 2 decrypt with client B's private key
+    encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE)
+    conn.sendall("command received".encode(FORMAT))
+    message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
+                                                  encrypted_message=encrypted_message)
+
+    # step 3 verify with client A's public key
+    signed_message = conn.recv(RECEIVE_BUFFER_SIZE)
+    authorized = ChatSystem.verify_signature(public_key=client_A_public_key,
+                                             mess_in_byte=message.encode(FORMAT), signature=signed_message)
+
+    if is_cert:
+        certificate_message = message
+        message = "certification received"
+
+    # step 4 write a response message
+    if authorized:
+        print(f" PV msg from<{client_A_username}> : {message}")
+    else:
+        print("we don't know if the message is from source client ( didn't authorized )")
+        return
+
+    response_message = "message_received"
+
+    if is_cert:
+        gui_app.add_chat(owner_username=client_A_username)
+    else:
+        gui_app.add_entry(message=message, target_username="from: " + client_A_username,
+                          response_msg=response_message)
+
+    # step 5 encrypt r-msg with client A's public key
+    encrypted_r_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
+                                                             mess_in_byte=response_message.encode(FORMAT))
+    conn.sendall(encrypted_r_message)
+    _ = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+    # step 6 sign r-msg with client B's private key
+    signed_r_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
+                                                        mess_in_byte=response_message.encode(FORMAT))
+    conn.sendall(signed_r_message)
+    _ = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+    # if it is a certificate message start listening on port we used to use
+    if is_cert:
+        group_ID, group_port = certificate_message.split(",")
+
+
+def public_chat_method(user_to_add: list[str]):
+    user_to_add.append(MyUser.username)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect(ADDR)
+        server_socket.sendall("public chat".encode(FORMAT))
+        response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        if response == "command received":
+            users_str = ",".join(user_to_add)
+            server_socket.sendall(users_str.encode(FORMAT))
+            _ = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+            while True:
+                group_port = random.randint(1024, 65535)
+                server_socket.sendall(str(group_port).encode(FORMAT))
+                response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                if response == "chat started":
+                    break
+
+
+            certificate = server_socket.recv(RECEIVE_BUFFER_SIZE)
+            server_socket.sendall("command received".encode(FORMAT))
+            data = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            myUsername, certificate_message = data.split("\n")
+            group_ID, group_port = certificate_message.split(",")
+            group_port = int(group_port)
+            # verify certificate
+            authorized = ChatSystem.verify_signature(public_key=server_public_key,
+                                                     mess_in_byte=certificate_message.encode(FORMAT),
+                                                     signature=certificate)
+
+            if not authorized:
+                return "Invalid signature"
+
+            # send this certificate to other people
+            # for user in user_to_add:
+            #     private_chat(username=MyUser.username,
+            #                  client_b_username=user,
+            #                  message=certificate_message,
+            #                  is_cert=True)
+
+            # start listening to port we said
+    return group_ID
+
 
 def p2p_client(conn, addr, gui_app):
     """
@@ -241,68 +372,11 @@ def p2p_client(conn, addr, gui_app):
 
         command = command.decode(FORMAT)
         if command == "message from client A":
-            conn.sendall("message received".encode(FORMAT))
-            client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
-            # step 2 ask form server for client A's public key
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                server_socket.connect(ADDR)
-                server_socket.sendall("ask for public key".encode(FORMAT))
-                respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
-                if respond != "command received":
-                    print("Invalid response")
-                    exit(1)
-
-                server_socket.sendall(client_A_username.encode(FORMAT))
-                signed_public_key = server_socket.recv(RECEIVE_BUFFER_SIZE)
-                server_socket.sendall("signed public key received".encode(FORMAT))
-                client_A_public_key_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
-
-                authorized: bool = ChatSystem.verify_signature(public_key=server_public_key,
-                                                               mess_in_byte=client_A_public_key_pem,
-                                                               signature=signed_public_key)
-
-                if authorized:
-                    client_A_public_key = serialization.load_pem_public_key(client_A_public_key_pem)
-
-            # step 2 decrypt with client B's private key
-            encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE)
-            conn.sendall("message received".encode(FORMAT))
-            message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
-                                                          encrypted_message=encrypted_message)
-
-            # step 3 verify with client A's public key
-            signed_message = conn.recv(RECEIVE_BUFFER_SIZE)
-            authorized = ChatSystem.verify_signature(public_key=client_A_public_key,
-                                                     mess_in_byte=message.encode(FORMAT), signature=signed_message)
-
-            message = message.split(":=,")[0]
-
-            # step 4 write a response message
-            if authorized:
-                print(f" PV msg from<{client_A_username}> : {message}")
-            else:
-                print("we don't know if the message is from source client ( didn't authorized )")
-                return
-
-            response_message = "message_received"
-            gui_app.add_entry(message=message, target_username="from: " + client_A_username,
-                              response_msg=response_message)
-
-            # step 5 encrypt r-msg with client A's public key
-            encrypted_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
-                                                                   mess_in_byte=response_message.encode(FORMAT))
-            conn.sendall(encrypted_message)
-            respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
-            # step 6 sign r-msg with client B's private key
-            signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
-                                                              mess_in_byte=response_message.encode(FORMAT))
-            conn.sendall(signed_message)
-            respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
+            server_side_private_chat(conn, gui_app)
             break
+
+        if command == "invitation certificate":
+            server_side_private_chat(conn, gui_app, is_cert=True)
 
 
 def add_permissions(username: str, role_value: str):

@@ -6,6 +6,9 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.public_chat_id_text = None
+        self.public_chat_textfield = None
+        self.send_button_public_chat = None
         self.message_public_chat = []
         self.pub_label = None
         self.target_username_perm = None
@@ -57,7 +60,7 @@ class GUIApp:
         self.entries = []
         self.entries_pub_chat = []
         self.text_fields = []
-        self.read_only_texts = []
+        self.public_chat_id_text_list = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
         self.entry_row_counter_chat_members = None  # Keep track of the row position for entries in public chat
         self.chat_row_counter = 0  # Keep track of the row position for chats
@@ -262,23 +265,28 @@ class GUIApp:
     def send_public_message(self, counter: int):
         public_message = self.message_public_chat[counter]
         my_username = client.MyUser.username
-        this_public_chat_port
+        this_public_chat_port = 1  # todo: work on this part and find the port of this group
 
-    def add_chat(self):
+    def add_chat(self, group_id: str = "group id"):
         chat_frame = ttk.Frame(self.chat_frame)
         chat_frame.grid(row=self.chat_row_counter, column=0, padx=5, pady=5, sticky='w')
 
-        read_only_text = tk.Text(chat_frame, height=4, width=30)
-        read_only_text.grid(row=0, column=0, padx=5, pady=5, sticky='w')
-        read_only_text.insert(tk.END, "Read-Only Text")
-        read_only_text.config(state='disabled')  # Make the text field read-only
+        self.public_chat_textfield = tk.Text(chat_frame, height=4, width=30)
+        self.public_chat_textfield.grid(row=0, column=0, padx=5, pady=5, sticky='w')
+        self.public_chat_textfield.insert(tk.END, "Read-Only Text")
+        self.public_chat_textfield.config(state='disabled')  # Make the text field read-only
 
         # Add scrollbar to text field
-        scrollbar = ttk.Scrollbar(chat_frame, orient="vertical", command=read_only_text.yview)
-        scrollbar.grid(row=0, column=1, sticky='ns')
-        read_only_text.config(yscrollcommand=scrollbar.set)
+        scrollbar = ttk.Scrollbar(chat_frame, orient="vertical", command=self.public_chat_textfield.yview)
+        scrollbar.grid(row=0, column=1, padx=0, pady=0, sticky='ns')
+        self.public_chat_textfield.config(yscrollcommand=scrollbar.set)
 
-        self.read_only_texts.append(read_only_text)
+        self.public_chat_id_text = tk.Text(chat_frame, height=3, width=20)
+        self.public_chat_id_text.grid(row=0, column=2, padx=5, pady=5)
+        self.public_chat_id_text.insert(tk.END, group_id)
+        self.public_chat_id_text.config(state='disabled')  # Make the text field read-only
+
+        self.public_chat_id_text_list.append(self.public_chat_textfield)
 
         add_message_label = ttk.Label(chat_frame, text="write your message:")
         add_message_label.grid(row=1, column=0, padx=5, pady=5)
@@ -286,8 +294,11 @@ class GUIApp:
         self.message_public_chat.append(ttk.Entry(chat_frame))
         self.message_public_chat[self.chat_row_counter].grid(row=1, column=1, padx=5, pady=5)
 
-        self.send_button = ttk.Button(chat_frame, text="Send", command=lambda chat_counter=self.chat_row_counter: self.send_public_message(chat_counter))
-        self.send_button.grid(row=1, column=2, padx=5, pady=5)
+        self.send_button_public_chat = ttk.Button(chat_frame, text="Send",
+                                                  command=lambda chat_counter=self.chat_row_counter:
+                                                  self.send_public_message(chat_counter))
+
+        self.send_button_public_chat.grid(row=1, column=2, padx=5, pady=5)
 
         self.chat_row_counter += 1
 
@@ -326,7 +337,7 @@ class GUIApp:
                                         command=self.private_chat_window.destroy)
         self.cancel_button.grid(row=3, column=1, padx=5, pady=5)
 
-    def send_private_message(self, chat_counter):
+    def send_private_message(self):
         message = self.message_text.get("1.0", tk.END).strip()
         username = self.target_username_entry.get()
         response_msg = client.private_chat(username=self.username_entry.get(),
@@ -373,10 +384,11 @@ class GUIApp:
         self.entries_pub_chat = []
 
         # run a method to create the group
+        group_id = client.public_chat_method(user_to_add=entries_data)
 
         # close the toplevel window and add a chat textfield on root page
         self.public_chat_window.destroy()
-        self.add_chat()
+        self.add_chat(group_id=group_id)
 
 
 def start_GUI():

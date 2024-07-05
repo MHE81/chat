@@ -1,11 +1,5 @@
-from enum import Enum
-
-class Role(Enum):
-    SUPER_ADMIN = "super admin"
-    ADMIN = "admin"
-    ADVANCED_USER = "advanced user"
-    BEGINNER_USER = "beginner user"
-
-# استخراج لیست مقادیر Enum
-role_values = [role.value for role in Role]
-print(role_values)
+import uuid
+group_id = uuid.uuid4()
+print(group_id)
+print(type(group_id))
+print(str(group_id))

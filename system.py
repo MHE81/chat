@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from typing import Self
 from enum import Enum
 import base64
+import uuid
 
 FORMAT = 'utf_8'
 
@@ -24,33 +25,32 @@ ADDR = (SERVER_IP, SERVER_PORT)
 RECEIVE_BUFFER_SIZE = 4096 * 2
 
 
+class Group:
+    def __init__(self, group_ID: str, group_port: int):
+        self.__message_history: list[list[str, str]] = []
+        """
+        in inner list we have:\n
+        0 index : username of message\n
+        1st index: context of message
+        """
+        self.group_ID: str = group_ID
+        self.group_port: int = group_port
+
+    def set_message(self, username_of_sender: str, message: str):
+        new_message = [username_of_sender, message]
+        self.__message_history.append(new_message)
+
+    def get_message_history(self) -> list[list[str, str]]:
+        return self.__message_history
+
+
+Groups: list[Group] = []
+
 class Role(Enum):
     SUPER_ADMIN = "super admin"
     ADMIN = "admin"
     ADVANCED_USER = "advanced user"
     BEGINNER_USER = "beginner user"
-
-
-# def encrypt(message: str, public_key):
-#     # Step 1: Convert message to bytes
-#     message_bytes = message.encode(FORMAT)
-#
-#     # Step 2: Encrypt the message
-#     encrypted_bytes = [pow(b, public_key[0], public_key[1]) for b in message_bytes]
-#
-#     return encrypted_bytes
-#
-#
-# def decrypt(encrypted_bytes, private_key):
-#     print(type(encrypted_bytes), type(private_key))
-#     # Step 1: Decrypt the message
-#     print(private_key)
-#     decrypted_bytes = [pow(b, private_key[0], private_key[1]) for b in encrypted_bytes]
-#
-#     # Step 2: Convert bytes to string
-#     decrypted_message = "".join(chr(b) for b in decrypted_bytes)
-#
-#     return decrypted_message
 
 
 class User:
@@ -152,22 +152,6 @@ class User:
         :return:
         """
         model = json.loads(jsonString)
-        # todo : we will never need to pass a list of users and
-        #  if we want to we had to send them multiple time for limited buffer size
-
-        # if isinstance(model, list):
-        #     users = [User(
-        #         email=item["Email"],
-        #         username=item["User Name"],
-        #         password=item["Password"],
-        #         salt=item["Salt"],
-        #         hashed=item["Hash Value"],
-        #         role=item["Role"],
-        #         public_key=item["Public_key"].encode(FORMAT),
-        #         private_key=item["Private_key"].encode(FORMAT),
-        #         client_listener_port=int(item["client_listener_port"])
-        #     ) for item in model]
-        #     return users
         if isinstance(model, dict):
             R_pem = model["Private_key_pem"]
             U_pem = model["Public_key_pem"]
@@ -444,6 +428,7 @@ class ChatSystem:
     def private_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
         src_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        conn.sendall("command received".encode(FORMAT))
         dest_username: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
         dest_user: User = find_user_by_username(self.users, dest_username)
 
@@ -475,8 +460,6 @@ class ChatSystem:
             return None
 
     def send_public_key(self, conn):
-        print("sending public key")
-
         conn.sendall("command received".encode(FORMAT))
         client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
@@ -489,6 +472,61 @@ class ChatSystem:
             response = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             if response == "signed public key received":
                 conn.sendall(public_key_pem)
+
+    @staticmethod
+    def is_port_free(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('', port))
+                return True  # Port is free
+            except OSError:
+                return False  # Port is in use
+
+    def public_chat_method(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        data: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        print("data", data)
+        users_list: list[str] = data.split(",")
+        print("users_list", users_list)
+        group_owner = users_list[-1]
+        print("group_owner", group_owner)
+        conn.sendall("command received".encode(FORMAT))
+
+        # check if the port we said is empty or not
+
+        while True:
+            group_port = int(conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT))
+            is_port_free: bool = self.is_port_free(group_port)
+            if is_port_free:
+                conn.sendall("chat started".encode(FORMAT))
+                break
+            else:
+                conn.sendall("port is not free".encode(FORMAT))
+
+        # find a unique group ID
+        group_users: list[User] = []
+        for username in users_list:
+            group_users.append(find_user_by_username(self.users, username))
+
+        Group_IDs = [group.group_ID for group in Groups]
+        while True:
+            group_id = str(uuid.uuid4())
+            if group_id not in Group_IDs:
+                # make group object
+                Groups.append(Group(group_ID=group_id, group_port=group_port))
+                break
+
+        # send certificate combining group ID with the asked port
+        certificate_message = group_id + "," + str(group_port)
+        certificate = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
+                                                       mess_in_byte=certificate_message.encode(FORMAT))
+        conn.sendall(certificate)
+        _ = conn.recv(RECEIVE_BUFFER_SIZE)
+        conn.sendall((username + "\n" + certificate_message).encode(FORMAT))
+
+        # start listening on group_port on server side so
+        # if there was a message for public chat we can store it
+
 
     def add_permissions(self, conn):
         conn.sendall("command received".encode(FORMAT))
@@ -530,7 +568,6 @@ class ChatSystem:
 
             if command == "login":
                 self.login_method(conn, addr)
-                return
 
                 # if command == "Show Users":
             # conn.sendall(str(self.users["username"]).encode(FORMAT))
@@ -543,6 +580,11 @@ class ChatSystem:
 
             if command == "add permission to user":
                 self.add_permissions(conn)
+
+            if command == "public chat":
+                self.public_chat_method(conn)
+
+            return
 
     def start_server(self):
         self.public_keys_list.append(Public_keys(self.server_public_pem))
