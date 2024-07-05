@@ -54,6 +54,7 @@ class GUIApp:
         self.chat_frame = ttk.Frame(root)
 
         self.entries = []
+        self.entries_pub_chat = []
         self.text_fields = []
         self.read_only_texts = []
         self.entry_row_counter = 0  # Keep track of the row position for entries
@@ -345,12 +346,12 @@ class GUIApp:
     def add_public_entry(self):
         entry = ttk.Entry(self.public_entry_frame)
         entry.grid(row=self.entry_row_counter_pub_chat, column=0, padx=5, pady=5)
-        self.entries.append(entry)
+        self.entries_pub_chat.append(entry)
         self.entry_row_counter_pub_chat += 1
 
     def create_public_chat(self):
-        entries_data = [entry.get() for entry in self.entries]
-        print(f"Public chat entries: {entries_data}")
+        entries_data = [entry.get() for entry in self.entries_pub_chat]
+        # todo : add entries to group chat
         self.public_chat_window.destroy()
         self.add_chat()
 

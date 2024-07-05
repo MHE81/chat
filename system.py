@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from typing import Self
 from enum import Enum
 import base64
+import uuid
 
 FORMAT = 'utf_8'
 
@@ -23,6 +24,7 @@ ADDR = (SERVER_IP, SERVER_PORT)
 
 RECEIVE_BUFFER_SIZE = 4096 * 2
 
+Group_IDs = []
 
 class Role(Enum):
     SUPER_ADMIN = "super admin"
@@ -152,22 +154,7 @@ class User:
         :return:
         """
         model = json.loads(jsonString)
-        # todo : we will never need to pass a list of users and
-        #  if we want to we had to send them multiple time for limited buffer size
 
-        # if isinstance(model, list):
-        #     users = [User(
-        #         email=item["Email"],
-        #         username=item["User Name"],
-        #         password=item["Password"],
-        #         salt=item["Salt"],
-        #         hashed=item["Hash Value"],
-        #         role=item["Role"],
-        #         public_key=item["Public_key"].encode(FORMAT),
-        #         private_key=item["Private_key"].encode(FORMAT),
-        #         client_listener_port=int(item["client_listener_port"])
-        #     ) for item in model]
-        #     return users
         if isinstance(model, dict):
             R_pem = model["Private_key_pem"]
             U_pem = model["Public_key_pem"]
@@ -475,7 +462,6 @@ class ChatSystem:
             return None
 
     def send_public_key(self, conn):
-        print("sending public key")
 
         conn.sendall("command received".encode(FORMAT))
         client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
@@ -507,6 +493,47 @@ class ChatSystem:
         target_user.permissions = User.assign_permissions(role=role_value)
 
         print(target_user.permissions)
+
+    @staticmethod
+    def is_port_free(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('', port))
+                return True  # Port is free
+            except OSError:
+                return False  # Port is in use
+
+    def public_chat_method(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        data: str = conn.recv(RECEIVE_BUFFER_SIZE)
+        users_list = data.split(",")
+        group_owner = users_list[-1]
+        conn.sendall("command received".encode(FORMAT))
+
+        # check if the port we said is empty or not
+
+        while True:
+            group_port = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            is_port_free: bool = self.is_port_free(group_port)
+            if is_port_free:
+                conn.sendall("chat started".encode(FORMAT))
+                break
+            else:
+                conn.sendall("port is not free".encode(FORMAT))
+
+        # find a unique group ID
+        group_users: list[User] = []
+        for username in users_list:
+            group_users.append(find_user_by_username(self.users, username))
+
+        while True:
+            group_id = uuid.uuid4()
+            if group_id not in Group_IDs:
+                Group_IDs.append(group_id)
+                break
+
+        # send group ID with the asked port
+
 
     def handle_client(self, conn, addr):
         print(f"Connected by {addr}")
@@ -543,6 +570,9 @@ class ChatSystem:
 
             if command == "add permission to user":
                 self.add_permissions(conn)
+
+            if command == "public chat":
+                self.public_chat_method(conn)
 
     def start_server(self):
         self.public_keys_list.append(Public_keys(self.server_public_pem))

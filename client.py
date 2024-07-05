@@ -223,7 +223,74 @@ def show_users():
 #         # print(f"Email: {user.email}, Username: {user.username}")
 
 
-def p2p_client(conn, addr, gui_app):
+def server_side_private_chat(conn, gui_app):
+    conn.sendall("message received".encode(FORMAT))
+    client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+    # step 2 ask form server for client A's public key
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect(ADDR)
+        server_socket.sendall("ask for public key".encode(FORMAT))
+        respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        if respond != "command received":
+            print("Invalid response")
+            return
+
+        server_socket.sendall(client_A_username.encode(FORMAT))
+        signed_public_key = server_socket.recv(RECEIVE_BUFFER_SIZE)
+        server_socket.sendall("signed public key received".encode(FORMAT))
+        client_A_public_key_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
+
+        authorized: bool = ChatSystem.verify_signature(public_key=server_public_key,
+                                                       mess_in_byte=client_A_public_key_pem,
+                                                       signature=signed_public_key)
+
+        if authorized:
+            client_A_public_key = serialization.load_pem_public_key(client_A_public_key_pem)
+
+    # step 2 decrypt with client B's private key
+    encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE)
+    conn.sendall("message received".encode(FORMAT))
+    message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
+                                                  encrypted_message=encrypted_message)
+
+    # step 3 verify with client A's public key
+    signed_message = conn.recv(RECEIVE_BUFFER_SIZE)
+    authorized = ChatSystem.verify_signature(public_key=client_A_public_key,
+                                             mess_in_byte=message.encode(FORMAT), signature=signed_message)
+
+    message = message.split(":=,")[0]
+
+    # step 4 write a response message
+    if authorized:
+        print(f" PV msg from<{client_A_username}> : {message}")
+    else:
+        print("we don't know if the message is from source client ( didn't authorized )")
+        return
+
+    response_message = "message_received"
+    gui_app.add_entry(message=message, target_username="from: " + client_A_username,
+                      response_msg=response_message)
+
+    # step 5 encrypt r-msg with client A's public key
+    encrypted_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
+                                                           mess_in_byte=response_message.encode(FORMAT))
+    conn.sendall(encrypted_message)
+    respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+    # step 6 sign r-msg with client B's private key
+    signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
+                                                      mess_in_byte=response_message.encode(FORMAT))
+    conn.sendall(signed_message)
+    respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+
+def server_side_public_chat(conn, gui_app):
+    pass
+
+
+def handle_server_side(conn, addr, gui_app):
     """
     in here we will describe to how to communicate with other client as server client
     :param gui_app:
@@ -241,67 +308,9 @@ def p2p_client(conn, addr, gui_app):
 
         command = command.decode(FORMAT)
         if command == "message from client A":
-            conn.sendall("message received".encode(FORMAT))
-            client_A_username = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+            server_side_private_chat(conn, gui_app)
 
-            # step 2 ask form server for client A's public key
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                server_socket.connect(ADDR)
-                server_socket.sendall("ask for public key".encode(FORMAT))
-                respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
-                if respond != "command received":
-                    print("Invalid response")
-                    exit(1)
-
-                server_socket.sendall(client_A_username.encode(FORMAT))
-                signed_public_key = server_socket.recv(RECEIVE_BUFFER_SIZE)
-                server_socket.sendall("signed public key received".encode(FORMAT))
-                client_A_public_key_pem = server_socket.recv(RECEIVE_BUFFER_SIZE)
-
-                authorized: bool = ChatSystem.verify_signature(public_key=server_public_key,
-                                                               mess_in_byte=client_A_public_key_pem,
-                                                               signature=signed_public_key)
-
-                if authorized:
-                    client_A_public_key = serialization.load_pem_public_key(client_A_public_key_pem)
-
-            # step 2 decrypt with client B's private key
-            encrypted_message = conn.recv(RECEIVE_BUFFER_SIZE)
-            conn.sendall("message received".encode(FORMAT))
-            message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
-                                                          encrypted_message=encrypted_message)
-
-            # step 3 verify with client A's public key
-            signed_message = conn.recv(RECEIVE_BUFFER_SIZE)
-            authorized = ChatSystem.verify_signature(public_key=client_A_public_key,
-                                                     mess_in_byte=message.encode(FORMAT), signature=signed_message)
-
-            message = message.split(":=,")[0]
-
-            # step 4 write a response message
-            if authorized:
-                print(f" PV msg from<{client_A_username}> : {message}")
-            else:
-                print("we don't know if the message is from source client ( didn't authorized )")
-                return
-
-            response_message = "message_received"
-            gui_app.add_entry(message=message, target_username="from: " + client_A_username,
-                              response_msg=response_message)
-
-            # step 5 encrypt r-msg with client A's public key
-            encrypted_message = ChatSystem.encrypt_with_public_key(public_key=client_A_public_key,
-                                                                   mess_in_byte=response_message.encode(FORMAT))
-            conn.sendall(encrypted_message)
-            respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
-            # step 6 sign r-msg with client B's private key
-            signed_message = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
-                                                              mess_in_byte=response_message.encode(FORMAT))
-            conn.sendall(signed_message)
-            respond = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-
+        if command == "":
             break
 
 
@@ -333,11 +342,33 @@ def add_permissions(username: str, role_value: str):
             return respond
 
 
+def public_chat_method(user_to_add: list[str]):
+    user_to_add.append(MyUser.username)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect(ADDR)
+        server_socket.sendall("public chat".encode(FORMAT))
+        response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        if response == "command received":
+            users_str = ",".join(user_to_add)
+            server_socket.sendall(users_str.encode(FORMAT))
+            response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+            while True:
+                group_port = random.randint(1024, 65535)
+                server_socket.sendall(str(group_port).encode(FORMAT))
+                response = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+                if response == "chat started":
+                    break
+
+
+
+
 def accept_connection(s, gui_app):
     print("thread runs")
     while True:
         conn, addr = s.accept()
-        threading.Thread(target=p2p_client, args=(conn, addr, gui_app)).start()
+        threading.Thread(target=handle_server_side, args=(conn, addr, gui_app)).start()
 
 
 def server_side_of_client(gui_app):
