@@ -283,6 +283,8 @@ def server_side_private_chat(conn, gui_app, is_cert=False):
 
     if is_cert:
         group_ID, group_port = certificate_message.split(",")
+        group_port = int(group_port)
+        MyUser.public_chat_ports[group_ID] = group_port
         gui_app.add_chat(group_id=group_ID)
     else:
         gui_app.add_entry(message=message, target_username="from: " + client_A_username,
@@ -414,6 +416,15 @@ def send_public_message(message: str, group_id: str):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((MY_IP, group_port))
         s.sendall("send public message".encode(FORMAT))
+        _ = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        message = f"<{MyUser.username}>: " + message
+        data = message + ",=" + group_id
+        encrypted_message = ChatSystem.encrypt_with_public_key(public_key=server_public_key,
+                                                               mess_in_byte=data.encode(FORMAT))
+
+        s.sendall(encrypted_message)
+
 
 
 def accept_connection(s, gui_app):

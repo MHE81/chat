@@ -27,7 +27,7 @@ RECEIVE_BUFFER_SIZE = 4096 * 2
 
 class Group:
     def __init__(self, group_ID: str, group_port: int, group_users: list):
-        self.__message_history: list[list[str, str]] = []
+        self.__message_history: list[str] = []
         """
         in inner list we have:\n
         0 index : username of message\n
@@ -37,11 +37,10 @@ class Group:
         self.group_port: int = group_port
         self.group_users: list = group_users
 
-    def set_message(self, username_of_sender: str, message: str):
-        new_message = [username_of_sender, message]
-        self.__message_history.append(new_message)
+    def set_message(self, message: str):
+        self.__message_history.append((message + "\n"))
 
-    def get_message_history(self) -> list[list[str, str]]:
+    def get_message_history(self) -> list[str]:
         return self.__message_history
 
 
@@ -473,8 +472,7 @@ class ChatSystem:
             if response == "signed public key received":
                 conn.sendall(public_key_pem)
 
-    @staticmethod
-    def is_port_free(port):
+    def is_port_free(self, port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.bind(('', port))
@@ -482,11 +480,37 @@ class ChatSystem:
             except OSError:
                 return False  # Port is in use
 
-    def handle_public_chat(self):
-        pass
+    def store_message_from_public_chat(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        encrypted_data = conn.recv(RECEIVE_BUFFER_SIZE)
 
-    @staticmethod
-    def listen_to_port(port: int):
+        data = ChatSystem.decrypt_with_private_key(private_key=self.server_private_key,
+                                                   encrypted_message=encrypted_data)
+        message, group_id = data.split(",=")
+
+        for t_group in Groups:
+            if t_group.group_ID == group_id:
+                chat_group = t_group
+                break
+
+        chat_group.set_message(message=message)
+        message_history = chat_group.get_message_history()
+        print(message_history)
+
+    def handle_public_chat(self, conn, addr):
+
+        while True:
+            message = conn.recv(RECEIVE_BUFFER_SIZE)
+
+            if not message:
+                break
+            message = message.decode(FORMAT)
+            if message == "send public message":
+                self.store_message_from_public_chat(conn)
+
+            return
+
+    def listen_to_port(self, port: int):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((SERVER_IP, port))
             print("listening on group port")
@@ -494,7 +518,7 @@ class ChatSystem:
             print(f"Chat system listening on port {SERVER_PORT}...")
             while True:
                 conn, addr = s.accept()
-                threading.Thread(target=print, args=("chat start on group port",)).start()
+                threading.Thread(target=self.handle_public_chat, args=(conn, addr)).start()
 
     def public_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
