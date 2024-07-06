@@ -116,7 +116,7 @@ class User:
         'super admin' : can add admins , can add advanced users, can add and remove users from group chat, can send private messages
         'admin' : can can add advanced users, can add and remove users from group chat, can send private messages
         'advanced user' : can add and remove users from group chat,can send private messages
-        'beginner user' : can send private messages
+        'beginner user' : can send private messages, only this role can't create group chat
         }
 
         :param role:
@@ -507,9 +507,7 @@ class ChatSystem:
             if action == "add":
                 chat_group.group_users.append(target_user)
             elif action == "remove":
-                print(chat_group.group_users)
                 chat_group.group_users.remove(target_user)
-                print(chat_group.group_users)
 
         elif not is_command:
 

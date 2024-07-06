@@ -94,9 +94,7 @@ def sign_up(email, username, password, password_confirm):
             elif massage == "Here is your key:":
                 keys = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
                 s.sendall("keys arrived".encode(FORMAT))
-                print(keys)
                 success = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-                print(success)
                 return "Done"
         return "Done"
 
