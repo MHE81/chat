@@ -262,10 +262,10 @@ class GUIApp:
 
         return True
 
-    def send_public_message(self, counter: int):
-        public_message = self.message_public_chat[counter]
-        my_username = client.MyUser.username
-        this_public_chat_port = 1  # todo: work on this part and find the port of this group
+    def send_public_message(self, chat_counter: str, chat_id: str):
+        message = self.message_public_chat[chat_counter].get()
+        print(message, chat_id)
+        client.send_public_message(message=message, group_id=chat_id)
 
     def add_chat(self, group_id: str = "group id"):
         chat_frame = ttk.Frame(self.chat_frame)
@@ -295,8 +295,8 @@ class GUIApp:
         self.message_public_chat[self.chat_row_counter].grid(row=1, column=1, padx=5, pady=5)
 
         self.send_button_public_chat = ttk.Button(chat_frame, text="Send",
-                                                  command=lambda chat_counter=self.chat_row_counter:
-                                                  self.send_public_message(chat_counter))
+                                                  command=lambda chat_counter=self.chat_row_counter, chat_id=group_id:
+                                                  self.send_public_message(chat_counter, chat_id))
 
         self.send_button_public_chat.grid(row=1, column=2, padx=5, pady=5)
 
@@ -386,9 +386,13 @@ class GUIApp:
         # run a method to create the group
         group_id = client.public_chat_method(user_to_add=entries_data)
 
-        # close the toplevel window and add a chat textfield on root page
+        if group_id == "you can't add public chats":
+            messagebox.showerror(title="error", message="You can't add public chats")
+        else:
+            # close the toplevel window and add a chat textfield on root page
+            self.add_chat(group_id=group_id)
+
         self.public_chat_window.destroy()
-        self.add_chat(group_id=group_id)
 
 
 def start_GUI():

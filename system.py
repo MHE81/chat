@@ -26,7 +26,7 @@ RECEIVE_BUFFER_SIZE = 4096 * 2
 
 
 class Group:
-    def __init__(self, group_ID: str, group_port: int):
+    def __init__(self, group_ID: str, group_port: int, group_users: list):
         self.__message_history: list[list[str, str]] = []
         """
         in inner list we have:\n
@@ -35,6 +35,7 @@ class Group:
         """
         self.group_ID: str = group_ID
         self.group_port: int = group_port
+        self.group_users: list = group_users
 
     def set_message(self, username_of_sender: str, message: str):
         new_message = [username_of_sender, message]
@@ -46,6 +47,7 @@ class Group:
 
 Groups: list[Group] = []
 
+
 class Role(Enum):
     SUPER_ADMIN = "super admin"
     ADMIN = "admin"
@@ -56,7 +58,7 @@ class Role(Enum):
 class User:
     def __init__(self, email: str, username: str, password: str, role: str, salt='', hashed='', public_key=' ',
                  private_key=' ',
-                 client_listener_port=0):
+                 client_listener_port=0, public_chat_ports={}):
         self.email = email
         self.username = username
         self.password = password
@@ -69,7 +71,7 @@ class User:
         """
         list_ability :
         0 : can send private messages
-        1 : can add and remove users from group chat
+        1 : can add and remove users from group chat, can add group chat
         2 : can add advanced users
         3 : can add admins
         """
@@ -91,6 +93,11 @@ class User:
         a port that the client listens on it so that if another client 
         asks for a p2p connection we can answer it 
         """
+        self.public_chat_ports: dict[str, int] = public_chat_ports
+        """
+        key : group id
+        value : group port
+        """
 
     @staticmethod
     def assign_permissions(role: str) -> list[bool]:
@@ -100,7 +107,7 @@ class User:
 
         list_ability :
         0 : can send private messages
-        1 : can add and remove users from group chat
+        1 : can add and remove users from group chat, can add group chat
         2 : can add advanced users
         3 : can add admins
 
@@ -139,7 +146,8 @@ class User:
                                                                 str) else self.public_key_pem.decode(FORMAT),
             "Private_key_pem": self.private_key_pem if isinstance(self.private_key_pem,
                                                                   str) else self.private_key_pem.decode(FORMAT),
-            "client_listener_port": self.client_listener_port
+            "client_listener_port": self.client_listener_port,
+            "public_chat_ports": self.public_chat_ports
         }
         return json.dumps(userModel)
 
@@ -159,18 +167,10 @@ class User:
                                                                                         password=None)
             public_key = U_pem if U_pem == " " else serialization.load_pem_public_key(U_pem.encode(FORMAT))
 
-            return User(
-                email=model["Email"],
-                username=model["User Name"],
-                password=model["Password"],
-                salt=model["Salt"],
-                hashed=model["Hash Value"],
-                role=model["Role"],
-                public_key=public_key,
-                private_key=private_key,
-                client_listener_port=int(model["client_listener_port"])
-            )
-        # return User(model["email"], model["username"], model["password"], model["salt"], model["hashed"], model["role"])
+            return User(email=model["Email"], username=model["User Name"], password=model["Password"],
+                        role=model["Role"], salt=model["Salt"], hashed=model["Hash Value"], public_key=public_key,
+                        private_key=private_key, client_listener_port=int(model["client_listener_port"]),
+                        public_chat_ports=model["public_chat_ports"])
 
 
 def find_user_by_username(users: list[User], username: str) -> User or None:
@@ -482,14 +482,28 @@ class ChatSystem:
             except OSError:
                 return False  # Port is in use
 
+    def handle_public_chat(self):
+        pass
+
+    @staticmethod
+    def listen_to_port(port: int):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((SERVER_IP, port))
+            print("listening on group port")
+            s.listen()
+            print(f"Chat system listening on port {SERVER_PORT}...")
+            while True:
+                conn, addr = s.accept()
+                threading.Thread(target=print, args=("chat start on group port",)).start()
+
     def public_chat_method(self, conn):
         conn.sendall("command received".encode(FORMAT))
         data: str = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
-        print("data", data)
         users_list: list[str] = data.split(",")
-        print("users_list", users_list)
-        group_owner = users_list[-1]
-        print("group_owner", group_owner)
+        group_owner_username = users_list[-1]
+        group_owner_user = find_user_by_username(users=self.users,
+                                                 username=group_owner_username)
+
         conn.sendall("command received".encode(FORMAT))
 
         # check if the port we said is empty or not
@@ -503,30 +517,40 @@ class ChatSystem:
             else:
                 conn.sendall("port is not free".encode(FORMAT))
 
-        # find a unique group ID
-        group_users: list[User] = []
-        for username in users_list:
-            group_users.append(find_user_by_username(self.users, username))
+        print("529 point")  # ---------------------------------------------------------------
 
+        # find a unique group ID
         Group_IDs = [group.group_ID for group in Groups]
         while True:
             group_id = str(uuid.uuid4())
             if group_id not in Group_IDs:
                 # make group object
-                Groups.append(Group(group_ID=group_id, group_port=group_port))
                 break
+        print("538 point")  # ---------------------------------------------------------------
+        # add users of a group
+        group_users: list[User] = []
+        for username in users_list:
+            user = find_user_by_username(self.users, username)
+            user.public_chat_ports[group_id] = group_port
+            group_users.append(user)
+
+        print("546 point")  # ---------------------------------------------------------------
+
+        Groups.append(Group(group_ID=group_id, group_port=group_port, group_users=group_users))
 
         # send certificate combining group ID with the asked port
         certificate_message = group_id + "," + str(group_port)
         certificate = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
                                                        mess_in_byte=certificate_message.encode(FORMAT))
+        print("554 point")  # ---------------------------------------------------------------
+
         conn.sendall(certificate)
         _ = conn.recv(RECEIVE_BUFFER_SIZE)
-        conn.sendall((username + "\n" + certificate_message).encode(FORMAT))
+        conn.sendall((group_owner_username + "\n" + certificate_message).encode(FORMAT))
 
         # start listening on group_port on server side so
         # if there was a message for public chat we can store it
-
+        threading.Thread(target=self.listen_to_port, args=(group_port,)).start()
 
     def add_permissions(self, conn):
         conn.sendall("command received".encode(FORMAT))

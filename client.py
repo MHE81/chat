@@ -102,7 +102,6 @@ def sign_up(email, username, password, password_confirm):
 
 
 def private_chat(username, client_b_username, message, is_cert=False):
-
     while True:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
 
@@ -134,7 +133,6 @@ def private_chat(username, client_b_username, message, is_cert=False):
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_b_socket:
                         client_b_socket.connect((MY_IP, client_B_listener_port))
 
-
                         if is_cert:
                             client_b_socket.sendall("invitation certificate".encode(FORMAT))
                         else:
@@ -157,14 +155,11 @@ def private_chat(username, client_b_username, message, is_cert=False):
                         client_b_socket.sendall(signed_message)
                         # receive response message
 
-
                         # receive encrypted response message and open it with client A's private key
                         encrypted_message = client_b_socket.recv(RECEIVE_BUFFER_SIZE)
                         client_b_socket.sendall("command received".encode(FORMAT))
                         response_message = ChatSystem.decrypt_with_private_key(private_key=MyUser.private_key,
                                                                                encrypted_message=encrypted_message)
-
-
 
                         # receive signed response message and authorize it with client B's public key
                         signed_message = client_b_socket.recv(RECEIVE_BUFFER_SIZE)
@@ -287,7 +282,8 @@ def server_side_private_chat(conn, gui_app, is_cert=False):
     response_message = "message_received"
 
     if is_cert:
-        gui_app.add_chat(owner_username=client_A_username)
+        group_ID, group_port = certificate_message.split(",")
+        gui_app.add_chat(group_id=group_ID)
     else:
         gui_app.add_entry(message=message, target_username="from: " + client_A_username,
                           response_msg=response_message)
@@ -306,11 +302,14 @@ def server_side_private_chat(conn, gui_app, is_cert=False):
 
     # if it is a certificate message start listening on port we used to use
     if is_cert:
-        group_ID, group_port = certificate_message.split(",")
+        print(group_ID, group_port)
 
 
 def public_chat_method(user_to_add: list[str]):
     user_to_add.append(MyUser.username)
+
+    if not MyUser.permissions[1]:
+        return "you can't add public chats"
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.connect(ADDR)
@@ -328,13 +327,15 @@ def public_chat_method(user_to_add: list[str]):
                 if response == "chat started":
                     break
 
-
             certificate = server_socket.recv(RECEIVE_BUFFER_SIZE)
             server_socket.sendall("command received".encode(FORMAT))
             data = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             myUsername, certificate_message = data.split("\n")
             group_ID, group_port = certificate_message.split(",")
             group_port = int(group_port)
+
+            MyUser.public_chat_ports[group_ID] = group_port
+
             # verify certificate
             authorized = ChatSystem.verify_signature(public_key=server_public_key,
                                                      mess_in_byte=certificate_message.encode(FORMAT),
@@ -344,11 +345,12 @@ def public_chat_method(user_to_add: list[str]):
                 return "Invalid signature"
 
             # send this certificate to other people
-            # for user in user_to_add:
-            #     private_chat(username=MyUser.username,
-            #                  client_b_username=user,
-            #                  message=certificate_message,
-            #                  is_cert=True)
+            user_to_add.remove(myUsername)
+            for user in user_to_add:
+                private_chat(username=myUsername,
+                             client_b_username=user,
+                             message=certificate_message,
+                             is_cert=True)
 
             # start listening to port we said
     return group_ID
@@ -405,6 +407,13 @@ def add_permissions(username: str, role_value: str):
             server_socket.sendall((username + ":," + role_value).encode(FORMAT))
             respond = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
             return respond
+
+
+def send_public_message(message: str, group_id: str):
+    group_port = MyUser.public_chat_ports[group_id]
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((MY_IP, group_port))
+        s.sendall("send public message".encode(FORMAT))
 
 
 def accept_connection(s, gui_app):
