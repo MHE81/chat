@@ -36,9 +36,10 @@ class Group:
         self.group_ID: str = group_ID
         self.group_port: int = group_port
         self.group_users: list = group_users
+        self.set_message(message="----")
 
     def set_message(self, message: str):
-        self.__message_history.append((message + "\n"))
+        self.__message_history.append(message)
 
     def get_message_history(self) -> list[str]:
         return self.__message_history
@@ -494,8 +495,41 @@ class ChatSystem:
                 break
 
         chat_group.set_message(message=message)
-        message_history = chat_group.get_message_history()
-        print(message_history)
+
+    def reload_message_history(self, conn):
+        conn.sendall("command received".encode(FORMAT))
+        encrypted_data = conn.recv(RECEIVE_BUFFER_SIZE)
+        data = ChatSystem.decrypt_with_private_key(private_key=self.server_private_key,
+                                                   encrypted_message=encrypted_data)
+
+        group_id, client_username = data.split(",:")
+        conn.sendall("command received".encode(FORMAT))
+
+        # check if the client is really who he says he is
+        signature = conn.recv(RECEIVE_BUFFER_SIZE)
+        client_user: User = find_user_by_username(users=self.users, username=client_username)
+        client_public_key = client_user.public_key
+        authorized = ChatSystem.verify_signature(public_key=client_public_key,
+                                                 mess_in_byte=client_username.encode(FORMAT),
+                                                 signature=signature)
+        if authorized:
+            conn.sendall("authorized".encode(FORMAT))
+        else:
+            conn.sendall("not authorized".encode(FORMAT))
+            return
+        _ = conn.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        # find the group with group ID
+        for t_group in Groups:
+            # check if the user is in group
+            if t_group.group_ID == group_id:
+                group = t_group
+                break
+        message_list = group.get_message_history()
+
+        message_history = "\n".join(message_list)
+
+        conn.sendall(message_history.encode(FORMAT))
 
     def handle_public_chat(self, conn, addr):
 
@@ -507,6 +541,8 @@ class ChatSystem:
             message = message.decode(FORMAT)
             if message == "send public message":
                 self.store_message_from_public_chat(conn)
+            if message == "reload request":
+                self.reload_message_history(conn)
 
             return
 
@@ -541,8 +577,6 @@ class ChatSystem:
             else:
                 conn.sendall("port is not free".encode(FORMAT))
 
-        print("529 point")  # ---------------------------------------------------------------
-
         # find a unique group ID
         Group_IDs = [group.group_ID for group in Groups]
         while True:
@@ -550,7 +584,6 @@ class ChatSystem:
             if group_id not in Group_IDs:
                 # make group object
                 break
-        print("538 point")  # ---------------------------------------------------------------
         # add users of a group
         group_users: list[User] = []
         for username in users_list:
@@ -558,16 +591,12 @@ class ChatSystem:
             user.public_chat_ports[group_id] = group_port
             group_users.append(user)
 
-        print("546 point")  # ---------------------------------------------------------------
-
         Groups.append(Group(group_ID=group_id, group_port=group_port, group_users=group_users))
 
         # send certificate combining group ID with the asked port
         certificate_message = group_id + "," + str(group_port)
         certificate = ChatSystem.sign_with_private_key(private_key=self.server_private_key,
                                                        mess_in_byte=certificate_message.encode(FORMAT))
-        print("554 point")  # ---------------------------------------------------------------
-
         conn.sendall(certificate)
         _ = conn.recv(RECEIVE_BUFFER_SIZE)
         conn.sendall((group_owner_username + "\n" + certificate_message).encode(FORMAT))

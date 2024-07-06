@@ -358,6 +358,35 @@ def public_chat_method(user_to_add: list[str]):
     return group_ID
 
 
+def reload_one_chat(group_id: str):
+    group_port = MyUser.public_chat_ports[group_id]
+    print("363")    # -----------------------------------------------
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.connect((MY_IP, group_port))
+        server_socket.sendall("reload request".encode(FORMAT))
+        _ = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        data = group_id + ",:" + MyUser.username
+        encrypted_message = ChatSystem.encrypt_with_public_key(public_key=server_public_key,
+                                                               mess_in_byte=data.encode(FORMAT))
+        server_socket.sendall(encrypted_message)
+        _ = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        signed_username = ChatSystem.sign_with_private_key(private_key=MyUser.private_key,
+                                                           mess_in_byte=MyUser.username.encode(FORMAT))
+        server_socket.sendall(signed_username)
+        status = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        if status == "not authorized":
+            return "some problem with your request (not authorized)"
+        server_socket.sendall("command received".encode(FORMAT))
+
+        message_history = server_socket.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+
+        return message_history
+
+
+
+
 def p2p_client(conn, addr, gui_app):
     """
     in here we will describe to how to communicate with other client as server client
@@ -424,7 +453,6 @@ def send_public_message(message: str, group_id: str):
                                                                mess_in_byte=data.encode(FORMAT))
 
         s.sendall(encrypted_message)
-
 
 
 def accept_connection(s, gui_app):

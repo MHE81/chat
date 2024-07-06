@@ -6,6 +6,7 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.reload_chat_button = None
         self.public_chat_id_text = None
         self.public_chat_textfield = None
         self.send_button_public_chat = None
@@ -196,6 +197,24 @@ class GUIApp:
                                              command=self.choose_role)
         self.selected_permission.grid(row=2, column=0, columnspan=2, pady=10)
 
+    def reload_messages(self):
+        # todo: reload all chats
+        for id_chat in self.public_chat_id_text_list:
+            id_textfield = id_chat[0]
+            group_id = id_textfield.get("1.0", tk.END).strip()  # Get the text from Text widget
+            message_history = client.reload_one_chat(group_id=group_id)
+            print("206", message_history)
+            if message_history == "some problem with your request (not authorized)":
+                messagebox.showerror("error", "some problem with your request (not authorized)")
+            else:
+                # reload history for group ID of this chat
+                chat_entry = id_chat[1]
+                chat_entry.config(state='normal')  # Set the text field to normal state to allow editing
+                chat_entry.delete("1.0", tk.END)  # Delete all existing content in the text field
+                chat_entry.insert(tk.END, message_history)  # Insert the new message history
+                chat_entry.config(state='disabled')  # Set the text field back to read-only state
+
+
     def submit_credentials(self):
 
         username = self.username_entry.get()
@@ -228,6 +247,9 @@ class GUIApp:
 
         self.add_permission_button = ttk.Button(self.button_frame, text="Add permission", command=self.add_permission)
         self.add_permission_button.grid(row=0, column=3, padx=5, pady=5)
+
+        self.reload_chat_button = ttk.Button(self.button_frame, text="reload messages", command=self.reload_messages)
+        self.reload_chat_button.grid(row=0, column=4, padx=5, pady=5)
 
         # Display frames
         self.entry_frame.grid(row=2, column=0, padx=5, pady=5, sticky='nw')
@@ -286,7 +308,7 @@ class GUIApp:
         self.public_chat_id_text.insert(tk.END, group_id)
         self.public_chat_id_text.config(state='disabled')  # Make the text field read-only
 
-        self.public_chat_id_text_list.append(self.public_chat_textfield)
+        self.public_chat_id_text_list.append((self.public_chat_id_text, self.public_chat_textfield))
 
         add_message_label = ttk.Label(chat_frame, text="write your message:")
         add_message_label.grid(row=1, column=0, padx=5, pady=5)
