@@ -6,11 +6,14 @@ from tkinter import messagebox
 
 class GUIApp:
     def __init__(self, root):
+        self.remove_member_button = None
+        self.add_member_button = None
         self.reload_chat_button = None
         self.public_chat_id_text = None
         self.public_chat_textfield = None
         self.send_button_public_chat = None
         self.message_public_chat = []
+        self.add_or_remove_username_list = []
         self.pub_label = None
         self.target_username_perm = None
         self.selected_permission = None
@@ -198,14 +201,21 @@ class GUIApp:
         self.selected_permission.grid(row=2, column=0, columnspan=2, pady=10)
 
     def reload_messages(self):
-        # todo: reload all chats
+
+        all_chat_ports = client.MyUser.public_chat_ports
+        chat_id_available = [chat_id[0].get("1.0", tk.END).strip() for chat_id in self.public_chat_id_text_list]
+        for chat_id in all_chat_ports.keys():
+            if chat_id not in chat_id_available:
+                self.add_chat(group_id=chat_id)
+
         for id_chat in self.public_chat_id_text_list:
             id_textfield = id_chat[0]
             group_id = id_textfield.get("1.0", tk.END).strip()  # Get the text from Text widget
             message_history = client.reload_one_chat(group_id=group_id)
-            print("206", message_history)
-            if message_history == "some problem with your request (not authorized)":
-                messagebox.showerror("error", "some problem with your request (not authorized)")
+            if message_history == "you are not in the group":
+                messagebox.showerror("error", message_history)
+            elif message_history == "some problem with your request (not authorized)":
+                messagebox.showerror("error", message_history)
             else:
                 # reload history for group ID of this chat
                 chat_entry = id_chat[1]
@@ -213,7 +223,6 @@ class GUIApp:
                 chat_entry.delete("1.0", tk.END)  # Delete all existing content in the text field
                 chat_entry.insert(tk.END, message_history)  # Insert the new message history
                 chat_entry.config(state='disabled')  # Set the text field back to read-only state
-
 
     def submit_credentials(self):
 
@@ -284,10 +293,28 @@ class GUIApp:
 
         return True
 
-    def send_public_message(self, chat_counter: str, chat_id: str):
+    def send_public_message(self, chat_counter: str, chat_id: str, ):
         message = self.message_public_chat[chat_counter].get()
-        print(message, chat_id)
-        client.send_public_message(message=message, group_id=chat_id)
+        response = client.send_public_message(message=message, group_id=chat_id)
+        messagebox.showinfo("info", response)
+
+    def add_members(self, chat_counter, chat_id):
+        message = self.add_or_remove_username_list[chat_counter].get()
+        print(chat_counter, chat_id)
+        response = client.send_public_message(message=message,
+                                              group_id=chat_id,
+                                              is_command=True,
+                                              is_add=True)
+        messagebox.showinfo("info", response)
+
+    def remove_members(self, chat_counter, chat_id):
+        message = self.add_or_remove_username_list[chat_counter].get()
+        print(chat_counter, chat_id)
+        response = client.send_public_message(message=message,
+                                              group_id=chat_id,
+                                              is_command=True,
+                                              is_add=False)
+        messagebox.showinfo("info", response)
 
     def add_chat(self, group_id: str = "group id"):
         chat_frame = ttk.Frame(self.chat_frame)
@@ -321,6 +348,19 @@ class GUIApp:
                                                   self.send_public_message(chat_counter, chat_id))
 
         self.send_button_public_chat.grid(row=1, column=2, padx=5, pady=5)
+
+        self.add_member_button = ttk.Button(chat_frame, text="add",
+                                            command=lambda chat_counter=self.chat_row_counter, chat_id=group_id:
+                                            self.add_members(chat_counter, chat_id))
+        self.add_member_button.grid(row=0, column=3, padx=5, pady=5)
+
+        self.add_or_remove_username_list.append(ttk.Entry(chat_frame))
+        self.add_or_remove_username_list[self.chat_row_counter].grid(row=1, column=3, padx=5, pady=5)
+
+        self.remove_member_button = ttk.Button(chat_frame, text="remove",
+                                               command=lambda chat_counter=self.chat_row_counter, chat_id=group_id:
+                                               self.remove_members(chat_counter, chat_id))
+        self.remove_member_button.grid(row=2, column=3, padx=5, pady=5)
 
         self.chat_row_counter += 1
 

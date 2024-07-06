@@ -70,9 +70,9 @@ class User:
         self.permissions = self.assign_permissions(role)
         """
         list_ability :
-        0 : can send private messages
-        1 : can add and remove users from group chat, can add group chat
-        2 : can add advanced users
+        0 : can send private messages\n
+        1 : can add and remove users from group chat, can add group chat\n
+        2 : can add advanced users\n
         3 : can add admins
         """
         self.private_key_pem = " "
@@ -481,7 +481,7 @@ class ChatSystem:
             except OSError:
                 return False  # Port is in use
 
-    def store_message_from_public_chat(self, conn):
+    def store_message_from_public_chat(self, conn, is_command=False):
         conn.sendall("command received".encode(FORMAT))
         encrypted_data = conn.recv(RECEIVE_BUFFER_SIZE)
 
@@ -491,10 +491,31 @@ class ChatSystem:
 
         for t_group in Groups:
             if t_group.group_ID == group_id:
-                chat_group = t_group
+                chat_group: Group = t_group
                 break
 
-        chat_group.set_message(message=message)
+        if is_command:
+            # check for the permissions
+            client_username, target_username, action = message.split(":")
+            client_user: User = find_user_by_username(users=self.users, username=client_username)
+            target_user: User = find_user_by_username(users=self.users, username=target_username)
+
+            if not target_user.permissions[1]:
+                conn.sendall("you can't add or remove from group chats".encode())
+                return
+
+            if action == "add":
+                chat_group.group_users.append(target_user)
+            elif action == "remove":
+                print(chat_group.group_users)
+                chat_group.group_users.remove(target_user)
+                print(chat_group.group_users)
+
+        elif not is_command:
+
+            chat_group.set_message(message=message)
+
+        conn.sendall("done".encode(FORMAT))
 
     def reload_message_history(self, conn):
         conn.sendall("command received".encode(FORMAT))
@@ -529,7 +550,15 @@ class ChatSystem:
 
         message_history = "\n".join(message_list)
 
-        conn.sendall(message_history.encode(FORMAT))
+        # check if the client is in chat group or not
+        if client_user in group.group_users:
+            is_in_group = True
+            conn.sendall(message_history.encode(FORMAT))
+        else:
+            is_in_group = False
+            conn.sendall("you are not in the group".encode(FORMAT))
+
+
 
     def handle_public_chat(self, conn, addr):
 
@@ -541,6 +570,8 @@ class ChatSystem:
             message = message.decode(FORMAT)
             if message == "send public message":
                 self.store_message_from_public_chat(conn)
+            if message == "add or remove client from chat":
+                self.store_message_from_public_chat(conn, is_command=True)
             if message == "reload request":
                 self.reload_message_history(conn)
 

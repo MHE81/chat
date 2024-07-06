@@ -360,7 +360,6 @@ def public_chat_method(user_to_add: list[str]):
 
 def reload_one_chat(group_id: str):
     group_port = MyUser.public_chat_ports[group_id]
-    print("363")    # -----------------------------------------------
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.connect((MY_IP, group_port))
         server_socket.sendall("reload request".encode(FORMAT))
@@ -440,19 +439,35 @@ def add_permissions(username: str, role_value: str):
             return respond
 
 
-def send_public_message(message: str, group_id: str):
+def send_public_message(message: str, group_id: str, is_command=False, is_add=None):
     group_port = MyUser.public_chat_ports[group_id]
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((MY_IP, group_port))
-        s.sendall("send public message".encode(FORMAT))
+
+        if is_command:
+            s.sendall("add or remove client from chat".encode(FORMAT))
+        else:
+            s.sendall("send public message".encode(FORMAT))
+
         _ = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
 
-        message = f"<{MyUser.username}>: " + message
+        if is_command:
+            if is_add:
+                message = message + ":" + "add"
+            else:
+                message = message + ":" + "remove"
+
+            message = f"{MyUser.username}" + ":" + message
+        else:
+            message = f"<{MyUser.username}>: " + message
+
         data = message + ",=" + group_id
         encrypted_message = ChatSystem.encrypt_with_public_key(public_key=server_public_key,
                                                                mess_in_byte=data.encode(FORMAT))
 
         s.sendall(encrypted_message)
+        response = s.recv(RECEIVE_BUFFER_SIZE).decode(FORMAT)
+        return response
 
 
 def accept_connection(s, gui_app):
